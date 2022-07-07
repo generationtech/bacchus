@@ -38,7 +38,7 @@ else
   tarargs='-cpM'
 fi
 
-tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchus-backup-new-volume.sh $compressdir $encryptdir" -L "$volumesize" --volno-file "$tarimagedir"/volume -f "$basename".tar "$sourcedir"
+tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchus-backup-new-volume.sh $compressdir $encryptdir" -L "$volumesize" --volno-file "$tarimagedir"/volume -f "$basename".tar $sourcedir
 
 # Setup tar variables to call new-volume script for handling last (or possibly only) archive volume
 vol=$(cat "$tarimagedir"/volume)

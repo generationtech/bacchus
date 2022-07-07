@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 #
 #	Used in multivolume tar restore to unencrypt and uncompress each volume
 #

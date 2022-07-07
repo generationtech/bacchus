@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 #
 #	Used in multivolume tar backup to compress and encrypt each volume
 #
