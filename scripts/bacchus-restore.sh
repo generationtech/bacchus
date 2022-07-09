@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#
 #	Bacchus restore script
 #
 #	Restores multi-volume backups, unencrypting, uncompressing, and then untaring.
@@ -14,13 +14,14 @@
 #       put the restored files
 #
 #	usage:
-#	bacchus-restore.sh sourcedir basename compressdir encryptdir
+#	bacchus-restore.sh sourcedir destdir basename decryptdir compressdir
 #
-#	1 sourcedir - directory location of archive files
-#	2 basename - base filename for restore archive, appending
-#                     incremental archive volume number
-#	3 compressdir - Intermediate area to store uncompressed volume
-#	4 encryptdir  - Intermediate area to store unencrypted volume
+#	1 sourcedir   - directory location of archive files
+#	2 destdir     - directory location of archive files
+#	3 basename    - base filename for restore archive, appending
+#                 incremental archive volume number
+#	4 decryptdir  - Intermediate area to store unencrypted volume
+#	5 compressdir - Intermediate area to store uncompressed volume
 #
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
 #       Bacchus does not unencrypt backup, and operation will fail if
@@ -29,35 +30,48 @@
 scriptdir=$(dirname "$_")
 
 sourcedir="$1"
-basename="$2"
-compressdir="$3"
-encryptdir="$4"
+destdir="$2"
+basename="$3"
+decryptdir="$4"
+compressdir="$5"
+
+Cleanup()
+{
+  if [[ "$BCS_TMPFILE" == *"tmp"* ]]; then
+    rm -rf "$BCS_TMPFILE"
+  fi
+}
+
+BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
+trap Cleanup EXIT
 
 # process first (possibly only) backup volume
 echo "$basename".tar
 
 if [ -n "$BCS_PASSWORD" ]; then
-  rm -f "$encryptdir"/"$basename".tar.gz
-  echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$encryptdir"/"$basename".tar.gz "$sourcedir"/"$basename".tar.gz.gpg
+  echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$decryptdir"/"$basename".tar.gz "$sourcedir"/"$basename".tar.gz.gpg
+  compresssource="$decryptdir"
+else
+  compresssource="$sourcedir"
 fi
 
-gzip -9cd "$encryptdir"/"$basename".tar.gz > "$compressdir"/"$basename".tar
+pigz -9cd "$compresssource"/"$basename".tar.gz > "$compressdir"/"$basename".tar
+#gzip -9cd "$compresssource"/"$basename".tar.gz > "$compressdir"/"$basename".tar
+if [ -n "$BCS_PASSWORD" ]; then
+  rm -f "$decryptdir"/"$basename".tar.gz
+fi
 
-rm -f "$encryptdir"/"$basename".tar.gz
-
-if [ $BCS_VERBOSETAR == "on" ]; then
+if [ "$BCS_VERBOSETAR" == "on" ]; then
   tarargs='-xpMv'
 else
   tarargs='-xpM'
 fi
 
-tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh $sourcedir $compressdir $encryptdir" --volno-file volume -f "$compressdir"/"$basename".tar
+tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh $sourcedir $decryptdir $compressdir" --volno-file "$BCS_TMPFILE" -f "$compressdir"/"$basename".tar --directory "$destdir"
 
-vol=$(cat volume)
+vol=$(cat "$BCS_TMPFILE")
 case "$vol" in
 1)     rm "$compressdir"/"$basename".tar
        ;;
 *)     rm "$compressdir"/"$basename".tar-"$vol"
 esac
-
-rm volume

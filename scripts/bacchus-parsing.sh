@@ -2,15 +2,19 @@
 
 # Created by argbash-init v2.10.0
 # ARG_POSITIONAL_SINGLE([subcommand],[backup or restore])
-# ARG_OPTIONAL_SINGLE([source],[s],[source directory for backup targets or restore archive files],[.])
+# ARG_OPTIONAL_SINGLE([source],[s],[source directory],[.])
+# ARG_OPTIONAL_SINGLE([dest],[d],[destination directory],[.])
 # ARG_OPTIONAL_SINGLE([basename],[b],[base filename for incremental archive filenames],[backupfile])
 # ARG_OPTIONAL_SINGLE([volumesize],[v],[size in kB for each incremental archive file (only used for backup operations)],[100000])
-# ARG_OPTIONAL_SINGLE([compressdir],[c],[directory where intermediate compression operations are performed],[.])
-# ARG_OPTIONAL_SINGLE([encryptdir],[e],[BACKUP: final location of archive files. RESTORE: intermediate directory for decryption operations],[.])
+# ARG_OPTIONAL_BOOLEAN([ramdisk],[r],[create ramdisk. If used, can ommit optional tardir, compressdir & decryptdir],[on])
+# ARG_OPTIONAL_SINGLE([tardir],[t],[intermediate directory where raw tar file is built],[.])
+# ARG_OPTIONAL_SINGLE([compressdir],[c],[intermediate directory compression operations are performed],[.])
+# ARG_OPTIONAL_BOOLEAN([disablecompress],[z],[disable compression],[off])
+# ARG_OPTIONAL_SINGLE([decryptdir],[e],[intermediate directory for restore decryption operations],[.])
 # ARG_OPTIONAL_BOOLEAN([userpassword],[u],[get optional password from user console for encryption or decryption],[on])
 # ARG_OPTIONAL_SINGLE([filepassword],[f],[get optional password from file for encryption or decryption **warning**])
-# ARG_OPTIONAL_SINGLE([password],[p],[get optional password from command line for encryption or decryption **danger**])
-# ARG_OPTIONAL_BOOLEAN([revealpassword],[r],[echo optional password on screen],[off])
+# ARG_OPTIONAL_SINGLE([commandpassword],[p],[get optional password from command line for encryption or decryption **danger**])
+# ARG_OPTIONAL_BOOLEAN([revealpassword],[R],[echo optional password on screen],[off])
 # ARG_OPTIONAL_BOOLEAN([verbosetar],[T],[show tar verbose],[off])
 # ARG_OPTIONAL_BOOLEAN([confirm],[C],[confirm before starting operation],[on])
 # ARG_DEFAULTS_POS()
@@ -35,7 +39,7 @@ die()
 
 begins_with_short_option()
 {
-  local first_option all_short_options='sbvceufprTCh'
+  local first_option all_short_options='sdbvrtczeufpRTCh'
   first_option="${1:0:1}"
   test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
 }
@@ -45,13 +49,17 @@ _positionals=()
 _arg_subcommand=
 # THE DEFAULTS INITIALIZATION - OPTIONALS
 _arg_source="."
+_arg_dest="."
 _arg_basename="backupfile"
 _arg_volumesize="100000"
+_arg_ramdisk="on"
+_arg_tardir="."
 _arg_compressdir="."
-_arg_encryptdir="."
+_arg_disablecompress="off"
+_arg_decryptdir="."
 _arg_userpassword="on"
 _arg_filepassword=
-_arg_password=
+_arg_commandpassword=
 _arg_revealpassword="off"
 _arg_verbosetar="off"
 _arg_confirm="on"
@@ -60,17 +68,21 @@ _arg_confirm="on"
 print_help()
 {
   printf '%s\n' "Bacchus is a backup/resture program using tar, pigz, and gpg for ad-hoc data backups"
-  printf 'Usage: %s [-s|--source <arg>] [-b|--basename <arg>] [-v|--volumesize <arg>] [-c|--compressdir <arg>] [-e|--encryptdir <arg>] [-u|--(no-)userpassword] [-f|--filepassword <arg>] [-p|--password <arg>] [-r|--(no-)revealpassword] [-T|--(no-)verbosetar] [-C|--(no-)confirm] [-h|--help] <subcommand>\n' "$0"
+  printf 'Usage: %s [-s|--source <arg>] [-d|--dest <arg>] [-b|--basename <arg>] [-v|--volumesize <arg>] [-r|--(no-)ramdisk] [-t|--tardir <arg>] [-c|--compressdir <arg>] [-z|--(no-)disablecompress] [-e|--decryptdir <arg>] [-u|--(no-)userpassword] [-f|--filepassword <arg>] [-p|--commandpassword <arg>] [-R|--(no-)revealpassword] [-T|--(no-)verbosetar] [-C|--(no-)confirm] [-h|--help] <subcommand>\n' "$0"
   printf '\t%s\n' "<subcommand>: backup or restore"
-  printf '\t%s\n' "-s, --source: source directory for backup targets or restore archive files (default: '.')"
+  printf '\t%s\n' "-s, --source: source directory (default: '.')"
+  printf '\t%s\n' "-d, --dest: destination directory (default: '.')"
   printf '\t%s\n' "-b, --basename: base filename for incremental archive filenames (default: 'backupfile')"
   printf '\t%s\n' "-v, --volumesize: size in kB for each incremental archive file (only used for backup operations) (default: '100000')"
-  printf '\t%s\n' "-c, --compressdir: directory where intermediate compression operations are performed (default: '.')"
-  printf '\t%s\n' "-e, --encryptdir: BACKUP: final location of archive files. RESTORE: intermediate directory for decryption operations (default: '.')"
+  printf '\t%s\n' "-r, --ramdisk, --no-ramdisk: create ramdisk. If used, can ommit optional tardir, compressdir & decryptdir (on by default)"
+  printf '\t%s\n' "-t, --tardir: intermediate directory where raw tar file is built (default: '.')"
+  printf '\t%s\n' "-c, --compressdir: intermediate directory compression operations are performed (default: '.')"
+  printf '\t%s\n' "-z, --disablecompress, --no-disablecompress: disable compression (off by default)"
+  printf '\t%s\n' "-e, --decryptdir: intermediate directory for restore decryption operations (default: '.')"
   printf '\t%s\n' "-u, --userpassword, --no-userpassword: get optional password from user console for encryption or decryption (on by default)"
   printf '\t%s\n' "-f, --filepassword: get optional password from file for encryption or decryption **warning** (no default)"
-  printf '\t%s\n' "-p, --password: get optional password from command line for encryption or decryption **danger** (no default)"
-  printf '\t%s\n' "-r, --revealpassword, --no-revealpassword: echo optional password on screen (off by default)"
+  printf '\t%s\n' "-p, --commandpassword: get optional password from command line for encryption or decryption **danger** (no default)"
+  printf '\t%s\n' "-R, --revealpassword, --no-revealpassword: echo optional password on screen (off by default)"
   printf '\t%s\n' "-T, --verbosetar, --no-verbosetar: show tar verbose (off by default)"
   printf '\t%s\n' "-C, --confirm, --no-confirm: confirm before starting operation (on by default)"
   printf '\t%s\n' "-h, --help: Prints help"
@@ -92,6 +104,14 @@ parse_commandline()
       -s*)
         _arg_source="${_key##-s}"
         ;;
+      -d|--dest)
+        test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
+        _arg_dest="$2"
+        shift
+        ;;
+      -d*)
+        _arg_dest="${_key##-d}"
+        ;;
       -b|--basename)
         test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
         _arg_basename="$2"
@@ -108,6 +128,26 @@ parse_commandline()
       -v*)
         _arg_volumesize="${_key##-v}"
         ;;
+      -r|--no-ramdisk|--ramdisk)
+        _arg_ramdisk="on"
+        test "${1:0:5}" = "--no-" && _arg_ramdisk="off"
+        ;;
+      -r*)
+        _arg_ramdisk="on"
+        _next="${_key##-r}"
+        if test -n "$_next" -a "$_next" != "$_key"
+        then
+          { begins_with_short_option "$_next" && shift && set -- "-r" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
+        fi
+        ;;
+      -t|--tardir)
+        test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
+        _arg_tardir="$2"
+        shift
+        ;;
+      -t*)
+        _arg_tardir="${_key##-t}"
+        ;;
       -c|--compressdir)
         test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
         _arg_compressdir="$2"
@@ -116,13 +156,25 @@ parse_commandline()
       -c*)
         _arg_compressdir="${_key##-c}"
         ;;
-      -e|--encryptdir)
+      -z|--no-disablecompress|--disablecompress)
+        _arg_disablecompress="on"
+        test "${1:0:5}" = "--no-" && _arg_disablecompress="off"
+        ;;
+      -z*)
+        _arg_disablecompress="on"
+        _next="${_key##-z}"
+        if test -n "$_next" -a "$_next" != "$_key"
+        then
+          { begins_with_short_option "$_next" && shift && set -- "-z" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
+        fi
+        ;;
+      -e|--decryptdir)
         test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
-        _arg_encryptdir="$2"
+        _arg_decryptdir="$2"
         shift
         ;;
       -e*)
-        _arg_encryptdir="${_key##-e}"
+        _arg_decryptdir="${_key##-e}"
         ;;
       -u|--no-userpassword|--userpassword)
         _arg_userpassword="on"
@@ -144,24 +196,24 @@ parse_commandline()
       -f*)
         _arg_filepassword="${_key##-f}"
         ;;
-      -p|--password)
+      -p|--commandpassword)
         test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
-        _arg_password="$2"
+        _arg_commandpassword="$2"
         shift
         ;;
       -p*)
-        _arg_password="${_key##-p}"
+        _arg_commandpassword="${_key##-p}"
         ;;
-      -r|--no-revealpassword|--revealpassword)
+      -R|--no-revealpassword|--revealpassword)
         _arg_revealpassword="on"
         test "${1:0:5}" = "--no-" && _arg_revealpassword="off"
         ;;
-      -r*)
+      -R*)
         _arg_revealpassword="on"
-        _next="${_key##-r}"
+        _next="${_key##-R}"
         if test -n "$_next" -a "$_next" != "$_key"
         then
-          { begins_with_short_option "$_next" && shift && set -- "-r" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
+          { begins_with_short_option "$_next" && shift && set -- "-R" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
         fi
         ;;
       -T|--no-verbosetar|--verbosetar)

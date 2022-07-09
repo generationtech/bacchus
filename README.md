@@ -22,19 +22,5 @@ then parser script built with
 
 ## Notes
 
-1) Due to the way gpg now handles passwords on command line
-        with special characters, it might be necessary to put
-        this line in ~/.gnupg/gpg-agent.conf
-
-       allow-loopback-pinentry
-
-And restart gpg agent with command:
-
-       pkill gpg-agent
-
-  Refer to this article
-
-  https://wiki.archlinux.org/title/GnuPG#Unattended_passphrase
-
-2) If password was special characters, like symbols, it
+1) If password was special characters, like symbols, it
    might be necessary to wrap password in 'apostrophes'
