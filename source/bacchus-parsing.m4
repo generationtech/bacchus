@@ -11,7 +11,7 @@ exit 11  #)Created by argbash-init v2.10.0
 # ARG_OPTIONAL_BOOLEAN([ramdisk], [r], [create ramdisk. If used, can ommit optional tardir, compressdir & decryptdir], on)
 # ARG_OPTIONAL_SINGLE([tardir], [t], [intermediate directory where raw tar file is built], [.])
 # ARG_OPTIONAL_SINGLE([compressdir], [c], [intermediate directory compression operations are performed], [.])
-# ARG_OPTIONAL_BOOLEAN([disablecompress], [z], [disable compression], off)
+# ARG_OPTIONAL_BOOLEAN([compress], [z], [disable compression], on)
 # ARG_OPTIONAL_SINGLE([decryptdir], [e], [intermediate directory for restore decryption operations], [.])
 # ARG_OPTIONAL_BOOLEAN([userpassword], [u], [get optional password from user console for encryption or decryption], on)
 # ARG_OPTIONAL_SINGLE([filepassword], [f], [get optional password from file for encryption or decryption **warning**])

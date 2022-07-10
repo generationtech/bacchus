@@ -9,7 +9,7 @@
 # ARG_OPTIONAL_BOOLEAN([ramdisk],[r],[create ramdisk. If used, can ommit optional tardir, compressdir & decryptdir],[on])
 # ARG_OPTIONAL_SINGLE([tardir],[t],[intermediate directory where raw tar file is built],[.])
 # ARG_OPTIONAL_SINGLE([compressdir],[c],[intermediate directory compression operations are performed],[.])
-# ARG_OPTIONAL_BOOLEAN([disablecompress],[z],[disable compression],[off])
+# ARG_OPTIONAL_BOOLEAN([compress],[z],[disable compression],[on])
 # ARG_OPTIONAL_SINGLE([decryptdir],[e],[intermediate directory for restore decryption operations],[.])
 # ARG_OPTIONAL_BOOLEAN([userpassword],[u],[get optional password from user console for encryption or decryption],[on])
 # ARG_OPTIONAL_SINGLE([filepassword],[f],[get optional password from file for encryption or decryption **warning**])
@@ -55,7 +55,7 @@ _arg_volumesize="100000"
 _arg_ramdisk="on"
 _arg_tardir="."
 _arg_compressdir="."
-_arg_disablecompress="off"
+_arg_compress="on"
 _arg_decryptdir="."
 _arg_userpassword="on"
 _arg_filepassword=
@@ -68,7 +68,7 @@ _arg_confirm="on"
 print_help()
 {
   printf '%s\n' "Bacchus is a backup/resture program using tar, pigz, and gpg for ad-hoc data backups"
-  printf 'Usage: %s [-s|--source <arg>] [-d|--dest <arg>] [-b|--basename <arg>] [-v|--volumesize <arg>] [-r|--(no-)ramdisk] [-t|--tardir <arg>] [-c|--compressdir <arg>] [-z|--(no-)disablecompress] [-e|--decryptdir <arg>] [-u|--(no-)userpassword] [-f|--filepassword <arg>] [-p|--commandpassword <arg>] [-R|--(no-)revealpassword] [-T|--(no-)verbosetar] [-C|--(no-)confirm] [-h|--help] <subcommand>\n' "$0"
+  printf 'Usage: %s [-s|--source <arg>] [-d|--dest <arg>] [-b|--basename <arg>] [-v|--volumesize <arg>] [-r|--(no-)ramdisk] [-t|--tardir <arg>] [-c|--compressdir <arg>] [-z|--(no-)compress] [-e|--decryptdir <arg>] [-u|--(no-)userpassword] [-f|--filepassword <arg>] [-p|--commandpassword <arg>] [-R|--(no-)revealpassword] [-T|--(no-)verbosetar] [-C|--(no-)confirm] [-h|--help] <subcommand>\n' "$0"
   printf '\t%s\n' "<subcommand>: backup or restore"
   printf '\t%s\n' "-s, --source: source directory (default: '.')"
   printf '\t%s\n' "-d, --dest: destination directory (default: '.')"
@@ -77,7 +77,7 @@ print_help()
   printf '\t%s\n' "-r, --ramdisk, --no-ramdisk: create ramdisk. If used, can ommit optional tardir, compressdir & decryptdir (on by default)"
   printf '\t%s\n' "-t, --tardir: intermediate directory where raw tar file is built (default: '.')"
   printf '\t%s\n' "-c, --compressdir: intermediate directory compression operations are performed (default: '.')"
-  printf '\t%s\n' "-z, --disablecompress, --no-disablecompress: disable compression (off by default)"
+  printf '\t%s\n' "-z, --compress, --no-compress: disable compression (on by default)"
   printf '\t%s\n' "-e, --decryptdir: intermediate directory for restore decryption operations (default: '.')"
   printf '\t%s\n' "-u, --userpassword, --no-userpassword: get optional password from user console for encryption or decryption (on by default)"
   printf '\t%s\n' "-f, --filepassword: get optional password from file for encryption or decryption **warning** (no default)"
@@ -156,12 +156,12 @@ parse_commandline()
       -c*)
         _arg_compressdir="${_key##-c}"
         ;;
-      -z|--no-disablecompress|--disablecompress)
-        _arg_disablecompress="on"
-        test "${1:0:5}" = "--no-" && _arg_disablecompress="off"
+      -z|--no-compress|--compress)
+        _arg_compress="on"
+        test "${1:0:5}" = "--no-" && _arg_compress="off"
         ;;
       -z*)
-        _arg_disablecompress="on"
+        _arg_compress="on"
         _next="${_key##-z}"
         if test -n "$_next" -a "$_next" != "$_key"
         then

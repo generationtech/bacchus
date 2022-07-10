@@ -10,28 +10,23 @@
 # Other similar solutions using encryption result in total data
 # loss past failed incremental archive file.
 #
-#	usage:
-#	bacchus-backup.sh sourcedir destdir basename tardir compressdir volumesize
+#	Usage:
+#	bacchus-backup.sh
 #
-#	1 sourcedir   - Directory to backup
-#	2 destdir     - directory location of archive files
-#	3 basename    - Base filename for backup archive, appending
-#                 incremental backup volume number
-#	4 tardir      - Intermediate area for tar
-#	5 compressdir - Intermediate area to store compressed volume
-#	6 volumesize  - Size of each volume in kB
+# Utilizes these environment variables:
+#	BCS_SOURCE     - Directory to backup
+#	BCS_DEST       - directory location of archive files
+#	BCS_BASENAME   - Base filename for backup archive, appending
+#                  incremental backup volume number
+#	BCS_TARDIR     - Intermediate area for tar
+#	BCS_COMPRESDIR - Intermediate area to store compressed volume
+#	BCS_VOLUMESIZE - Size of each volume in kB
+# BCS_PASSWORD   - Password to encrypt backup archive volumes
 #
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
 #       bacchus does not encrypt backup
 
 scriptdir=$(dirname "$_")
-
-sourcedir="$1"
-destdir="$2"
-basename="$3"
-tardir="$4"
-compressdir="$5"
-volumesize="$6"
 
 Cleanup()
 {
@@ -43,8 +38,8 @@ Cleanup()
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
 
-if [ "$BCS_DISABLECOMPRESS" == "on" ] && [ -z "$BCS_PASSWORD" ]; then
-  tardir="$destdir"
+if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
+  BCS_TARDIR="$BCS_DEST"
 fi
 
 if [ "$BCS_VERBOSETAR" == "on" ]; then
@@ -53,18 +48,18 @@ else
   tarargs='-cpM'
 fi
 
-tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchus-backup-new-volume.sh $destdir $compressdir" -L "$volumesize" --volno-file "$BCS_TMPFILE" -f "$tardir"/"$basename".tar $sourcedir
+tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchus-backup-new-volume.sh" -L "$BCS_VOLUMESIZE" --volno-file "$BCS_TMPFILE" -f "$BCS_TARDIR"/"$BCS_BASENAME".tar $BCS_SOURCE
 
 # Setup tar variables to call new-volume script for handling last (or possibly only) archive volume
 vol=$(cat "$BCS_TMPFILE")
 case "$vol" in
-  1)  export TAR_ARCHIVE="$tardir"/"$basename".tar
+  1)  export TAR_ARCHIVE="$BCS_TARDIR"/"$BCS_BASENAME".tar
       ;;
-  *)  export TAR_ARCHIVE="$tardir"/"$basename".tar-"$vol"
+  *)  export TAR_ARCHIVE="$BCS_TARDIR"/"$BCS_BASENAME".tar-"$vol"
 esac
 
 export TAR_VOLUME=$(expr "$vol" + 1)
 export TAR_SUBCOMMAND="-c"
 export TAR_FD="none"
-"$scriptdir"/bacchus-backup-new-volume.sh "$destdir" "$compressdir"
+"$scriptdir"/bacchus-backup-new-volume.sh "$BCS_DEST" "$BCS_COMPRESDIR"
 printf '\n'

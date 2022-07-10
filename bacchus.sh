@@ -8,22 +8,34 @@ script_dir=$(dirname "$_")/scripts
 source "${script_dir}/bacchus-parsing.sh" || { echo "Couldn't find 'bacchus-parsing.sh' parsing library in the '$script_dir' directory"; exit 1; }
 # vvv  PLACE YOUR CODE HERE  vvv
 
+export BCS_SOURCE="$_arg_source"
+export BCS_DEST="$_arg_dest"
+export BCS_BASENAME="$_arg_basename"
+export BCS_VOLUMESIZE="$_arg_volumesize"
+export BCS_RAMDISK="$_arg_ramdisk"
+export BCS_TARDIR="$_arg_tardir"
+export BCS_COMPRESDIR="$_arg_compressdir"
+export BCS_COMPRESS="$_arg_compress"
+export BCS_DECRYPTDIR="$_arg_decryptdir"
+export BCS_VERBOSETAR="$_arg_verbosetar"
+export BCS_PASSWORD="$password"
+
 PrintOptions()
 {
-  printf 'Source directory:                    %s\n' "$_arg_source"
-  printf 'Destination directory:               %s\n' "$_arg_dest"
-  printf 'Base name for archive:               %s\n' "$_arg_basename"
-  printf 'Use ramdisk for intermediate dirs:   %s\n' "$_arg_ramdisk"
+  printf 'Source directory:                    %s\n' "$BCS_SOURCE"
+  printf 'Destination directory:               %s\n' "$BCS_DEST"
+  printf 'Base name for archive:               %s\n' "$BCS_BASENAME"
+  printf 'Use ramdisk for intermediate dirs:   %s\n' "$BCS_RAMDISK"
 
-  if [ "$_arg_disablecompress" == "off" ]; then
-    if [ "$_arg_compressdir" != "." ]; then
-      printf 'Intermediate compression directory:  %s\n' "$_arg_compressdir"
+  if [ "$BCS_COMPRESS" == "on" ]; then
+    if [ "$BCS_COMPRESDIR" != "." ]; then
+      printf 'Intermediate compression directory:  %s\n' "$BCS_COMPRESDIR"
     fi
   else
       printf 'Compression:                         disabled\n'
   fi
 
-  if [ -z "$password" ]; then
+  if [ -z "$BCS_PASSWORD" ]; then
       printf 'Encryption:                          disabled\n'
   else
     if [ -n "$_arg_filepassword" ]; then
@@ -35,7 +47,7 @@ PrintOptions()
     fi
 
     if [ "$_arg_revealpassword" == "on" ]; then
-      printf 'Password is:                         %s\n' "$password"
+      printf 'Password is:                         %s\n' "$BCS_PASSWORD"
     fi
   fi
 }
@@ -55,13 +67,13 @@ Backup()
   printf '|| Running Bacchus backup operation ||\n'
   printf ' ====================================\n'
   PrintOptions
-  if [ "$_arg_tardir" != "." ]; then
-    printf 'Intermediate tar directory:          %s\n' "$_arg_tardir"
+  if [ "$BCS_TARDIR" != "." ]; then
+    printf 'Intermediate tar directory:          %s\n' "$BCS_TARDIR"
   fi
-  printf 'Volume size for archive:             %s\n' "$_arg_volumesize"
+  printf 'Volume size for archive:             %s\n' "$BCS_VOLUMESIZE"
   printf '\n'
   ConfirmStart
-  "${script_dir}"/bacchus-backup.sh "$_arg_source" "$_arg_dest" "$_arg_basename" "$_arg_tardir" "$_arg_compressdir" "$_arg_volumesize"
+  "${script_dir}"/bacchus-backup.sh
 }
 
 Restore()
@@ -71,29 +83,29 @@ Restore()
   printf '|| Running Bacchus restore operation ||\n'
   printf ' =====================================\n'
   PrintOptions
-  if [ "$_arg_decryptdir" != "." ] && [ -n "$password" ]; then
-    printf 'Intermediate decryption directory:   %s\n' "$_arg_decryptdir"
+  if [ "$BCS_DECRYPTDIR" != "." ] && [ -n "$BCS_PASSWORD" ]; then
+    printf 'Intermediate decryption directory:   %s\n' "$BCS_DECRYPTDIR"
   fi
   printf '\n'
   ConfirmStart
-  "${script_dir}"/bacchus-restore.sh "$_arg_source" "$_arg_dest" "$_arg_basename" "$_arg_decryptdir" "$_arg_compressdir"
+  "${script_dir}"/bacchus-restore.sh
 }
 
 if [ -n "$_arg_filepassword" ]; then
-  password=$(< "$_arg_filepassword")
+  BCS_PASSWORD=$(< "$_arg_filepassword")
 
 elif [ -n "$_arg_commandpassword" ]; then
-    password="$_arg_commandpassword"
+    BCS_PASSWORD="$_arg_commandpassword"
 
 elif [ "$_arg_userpassword" == "on" ]; then
   while true; do
     printf '\n'
-    read -rsp "Enter a password for encryption or press enter for no password: " password
+    read -rsp "Enter a password for encryption or press enter for no password: " BCS_PASSWORD
     printf '\n'
-    if [ -n "$password" ]; then
+    if [ -n "$BCS_PASSWORD" ]; then
       read -rsp "Re-enter a password for encryption or press enter for no password: " verify
       printf '\n'
-      if [ -z "$verify" ] || [ "$password" != "$verify" ]; then
+      if [ -z "$verify" ] || [ "$BCS_PASSWORD" != "$verify" ]; then
         printf 'Passwords do not match!\n'
       else
         break
@@ -103,14 +115,6 @@ elif [ "$_arg_userpassword" == "on" ]; then
     fi
   done
 fi
-
-BCS_PASSWORD="$password"
-BCS_VERBOSETAR="$_arg_verbosetar"
-BCS_DISABLECOMPRESS="$_arg_disablecompress"
-
-export BCS_PASSWORD
-export BCS_VERBOSETAR
-export BCS_DISABLECOMPRESS
 
 case ${_arg_subcommand} in
   backup)

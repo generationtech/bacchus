@@ -10,27 +10,23 @@
 # Other similar solutions using encryption result in total data
 # loss of past failed incremental archive file.
 #
-#	usage:
-#	bacchus-restore.sh sourcedir destdir basename decryptdir compressdir
+#	Usage:
+#	bacchus-restore.sh
 #
-#	1 sourcedir   - directory location of archive files
-#	2 destdir     - directory location of archive files
-#	3 basename    - base filename for restore archive, appending
-#                 incremental archive volume number
-#	4 decryptdir  - Intermediate area to store unencrypted volume
-#	5 compressdir - Intermediate area to store uncompressed volume
+# Utilizes these environment variables:
+#	BCS_SOURCE     - directory location of archive files
+#	BCS_DEST       - directory location of archive files
+#	BCS_BASENAME   - base filename for restore archive, appending
+#                  incremental archive volume number
+#	BCS_DECRYPTDIR - Intermediate area to store unencrypted volume
+#	BCS_COMPRESDIR - Intermediate area to store uncompressed volume
+# BCS_PASSWORD   - Password to encrypt backup archive volumes
 #
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
 #       Bacchus does not unencrypt backup, and operation will fail if
 #       archive was backed up as encrypted
 
 scriptdir=$(dirname "$_")
-
-sourcedir="$1"
-destdir="$2"
-basename="$3"
-decryptdir="$4"
-compressdir="$5"
 
 Cleanup()
 {
@@ -43,26 +39,26 @@ BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
 
 # process first (possibly only) backup volume
-echo "$basename".tar
+echo "$BCS_BASENAME".tar
 
-source="$sourcedir"/"$basename".tar
+source="$BCS_SOURCE"/"$BCS_BASENAME".tar
 
-if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
+if [ "$BCS_COMPRESS" == "on" ]; then
   source="$source".gz
 fi
 
 if [ -n "$BCS_PASSWORD" ]; then
-  if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
-    destination="$decryptdir"/"$basename".tar.gz
+  if [ "$BCS_COMPRESS" == "on" ]; then
+    destination="$BCS_DECRYPTDIR"/"$BCS_BASENAME".tar.gz
   else
-    destination="$decryptdir"/"$basename".tar
+    destination="$BCS_DECRYPTDIR"/"$BCS_BASENAME".tar
   fi
   echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$destination" "$source".gpg
   source="$destination"
 fi
 
-if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
-  destination="$compressdir"/"$basename".tar
+if [ "$BCS_COMPRESS" == "on" ]; then
+  destination="$BCS_COMPRESDIR"/"$BCS_BASENAME".tar
   pigz -9cd "$source" > "$destination"
   #gzip -9cd "$source" > "$destination"
   if [ -n "$BCS_PASSWORD" ]; then
@@ -77,7 +73,7 @@ else
   tarargs='-xpM'
 fi
 
-tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh $sourcedir $decryptdir $compressdir" --volno-file "$BCS_TMPFILE" -f "$source" --directory "$destdir"
+tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh" --volno-file "$BCS_TMPFILE" -f "$source" --directory "$BCS_DEST"
 
 vol=$(cat "$BCS_TMPFILE")
 case "$vol" in

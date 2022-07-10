@@ -1,15 +1,17 @@
 #!/bin/bash
 #
-#	Used in multivolume tar backup to compress and encrypt each volume
+#	Helper script for multivolume tar backup to compress and encrypt each volume
 #
-#	usage:
-#	bacchus-backup-new-volume.sh destdir compressdir
+#	Usage:
+#	bacchus-backup-new-volume.sh
 #
-#	1 destdir  - location to store final volumes
-#	2 compressdir - Intermediate area to store compressed volume
-
-destdir="$1"
-compressdir="$2"
+# Utilizes these environment variables:
+#	BCS_DEST       - location to store final volumes
+#	BCS_COMPRESDIR - Intermediate area to store compressed volume
+# BCS_PASSWORD   - Password to encrypt backup archive volumes
+#
+# NOTE: If no password is supplied (as BCS_PASSWORD environment var),
+#       bacchus does not encrypt backup
 
 tararchivedir=$(dirname "$TAR_ARCHIVE")
 TAR_ARCHIVE=$(basename "$TAR_ARCHIVE")
@@ -26,17 +28,17 @@ case "$TAR_SUBCOMMAND" in
 esac
 
 source="$tararchivedir"/"$TAR_ARCHIVE"
-destination="$destdir"/"$TAR_ARCHIVE"
+destination="$BCS_DEST"/"$TAR_ARCHIVE"
 
-if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
+if [ "$BCS_COMPRESS" == "on" ]; then
   if [ -n "$BCS_PASSWORD" ]; then
-    destination="$compressdir"/"$TAR_ARCHIVE"
+    destination="$BCS_COMPRESDIR"/"$TAR_ARCHIVE"
   fi
   pigz -9c "$source" > "$destination".gz
   #gzip -9c "$source" > "$destination".gz
   rm -f "$source"
   source="$destination".gz
-  destination="$destdir"/"$TAR_ARCHIVE".gz
+  destination="$BCS_DEST"/"$TAR_ARCHIVE".gz
 fi
 
 if [ -n "$BCS_PASSWORD" ]; then
