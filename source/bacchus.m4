@@ -71,7 +71,7 @@ Restore()
   printf '|| Running Bacchus restore operation ||\n'
   printf ' =====================================\n'
   PrintOptions
-  if [[ "$_arg_decryptdir" != "." ]]; then
+  if [[ "$_arg_decryptdir" != "." ]] && [[ -n "$password" ]]; then
     printf 'Intermediate decryption directory:   %s\n' "$_arg_decryptdir"
   fi
   printf '\n'
@@ -106,9 +106,11 @@ fi
 
 BCS_PASSWORD="$password"
 BCS_VERBOSETAR="$_arg_verbosetar"
+BCS_DISABLECOMPRESS="$_arg_disablecompress"
 
 export BCS_PASSWORD
 export BCS_VERBOSETAR
+export BCS_DISABLECOMPRESS
 
 case ${_arg_subcommand} in
   backup)

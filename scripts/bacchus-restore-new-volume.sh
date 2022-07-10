@@ -20,29 +20,40 @@ oldname="${TAR_ARCHIVE##*/}"
 
 echo "$filename"
 
+source="$sourcedir"/"$filename"
+if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
+  source="$source".gz
+  rm -f "$compressdir"/"$oldname"
+fi
+if [ -n "$BCS_PASSWORD" ]; then
+  source="$source".gpg
+  rm -f "$decryptdir"/"$oldname"
+fi
+
 case "$TAR_SUBCOMMAND" in
-  -x) if [ -n "$BCS_PASSWORD" ]; then
-        test -r "$sourcedir"/"$filename".gz.gpg || exit 1
-      else
-        test -r "$sourcedir"/"$filename".gz || exit 1
-      fi
+  -x) test -r "$source" || exit 1
       ;;
   *)  exit 1
 esac
 
-rm "$compressdir"/"$oldname"
-
 if [ -n "$BCS_PASSWORD" ]; then
-  echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$decryptdir"/"$filename".gz "$sourcedir"/"$filename".gz.gpg
-  compresssource="$decryptdir"
-else
-  compresssource="$sourcedir"
+  if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
+    destination="$decryptdir"/"$filename".gz
+  else
+    destination="$decryptdir"/"$filename"
+  fi
+  echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$destination" "$source"
+  source="$destination"
 fi
 
-pigz -9cd "$compresssource"/"$filename".gz > "$compressdir"/"$filename"
-#gzip -9cd "$compresssource"/"$filename".gz > "$compressdir"/"$filename"
-if [ -n "$BCS_PASSWORD" ]; then
-  rm -f "$decryptdir"/"$filename".gz
+if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
+  destination="$compressdir"/"$filename"
+  pigz -9cd "$source" > "$destination"
+  #gzip -9cd "$source" > "$destination"
+  if [ -n "$BCS_PASSWORD" ]; then
+    rm -f "$source"
+  fi
+  source="$destination"
 fi
 
 case "$TAR_FD" in

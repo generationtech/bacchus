@@ -43,6 +43,10 @@ Cleanup()
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
 
+if [ "$BCS_DISABLECOMPRESS" == "on" ] && [ -z "$BCS_PASSWORD" ]; then
+  tardir="$destdir"
+fi
+
 if [ "$BCS_VERBOSETAR" == "on" ]; then
   tarargs='-cpMv'
 else

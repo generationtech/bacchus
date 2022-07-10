@@ -11,7 +11,7 @@
 destdir="$1"
 compressdir="$2"
 
-tardir=$(dirname "$TAR_ARCHIVE")
+tararchivedir=$(dirname "$TAR_ARCHIVE")
 TAR_ARCHIVE=$(basename "$TAR_ARCHIVE")
 name=$(expr "$TAR_ARCHIVE" : '\(.*\)-.*')
 vol=${name:-"$TAR_ARCHIVE"}-"$TAR_VOLUME"
@@ -25,21 +25,26 @@ case "$TAR_SUBCOMMAND" in
   *)        exit 1
 esac
 
-if [ -n "$BCS_PASSWORD" ]; then
-  compressdest="$compressdir"
-else
-  compressdest="$destdir"
+source="$tararchivedir"/"$TAR_ARCHIVE"
+destination="$destdir"/"$TAR_ARCHIVE"
+
+if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
+  if [ -n "$BCS_PASSWORD" ]; then
+    destination="$compressdir"/"$TAR_ARCHIVE"
+  fi
+  pigz -9c "$source" > "$destination".gz
+  #gzip -9c "$source" > "$destination".gz
+  rm -f "$source"
+  source="$destination".gz
+  destination="$destdir"/"$TAR_ARCHIVE".gz
 fi
-pigz -9c "$tardir"/"$TAR_ARCHIVE" > "$compressdest"/"$TAR_ARCHIVE".gz
-#gzip -9c "$tardir"/"$TAR_ARCHIVE" > "$compressdest"/"$TAR_ARCHIVE".gz
-rm "$tardir"/"$TAR_ARCHIVE"
 
 if [ -n "$BCS_PASSWORD" ]; then
-  echo "$BCS_PASSWORD" | gpg -qc --cipher-algo AES256 --compress-algo none --batch --passphrase-fd 0 -o "$destdir"/"$TAR_ARCHIVE".gz.gpg "$compressdest"/"$TAR_ARCHIVE".gz
-  rm -f "$compressdest"/"$TAR_ARCHIVE".gz
+  echo "$BCS_PASSWORD" | gpg -qc --cipher-algo AES256 --compress-algo none --batch --passphrase-fd 0 -o "$destination".gpg "$source"
+  rm -f "$source"
 fi
 
-tarnew="$tardir"/"$vol"
+tarnew="$tararchivedir"/"$vol"
 case "$TAR_FD" in
   none) exit 0
         ;;

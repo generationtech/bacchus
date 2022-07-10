@@ -10,9 +10,6 @@
 # Other similar solutions using encryption result in total data
 # loss of past failed incremental archive file.
 #
-#	NOTE: Execute this script from within the directory you want to
-#       put the restored files
-#
 #	usage:
 #	bacchus-restore.sh sourcedir destdir basename decryptdir compressdir
 #
@@ -48,17 +45,30 @@ trap Cleanup EXIT
 # process first (possibly only) backup volume
 echo "$basename".tar
 
-if [ -n "$BCS_PASSWORD" ]; then
-  echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$decryptdir"/"$basename".tar.gz "$sourcedir"/"$basename".tar.gz.gpg
-  compresssource="$decryptdir"
-else
-  compresssource="$sourcedir"
+source="$sourcedir"/"$basename".tar
+
+if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
+  source="$source".gz
 fi
 
-pigz -9cd "$compresssource"/"$basename".tar.gz > "$compressdir"/"$basename".tar
-#gzip -9cd "$compresssource"/"$basename".tar.gz > "$compressdir"/"$basename".tar
 if [ -n "$BCS_PASSWORD" ]; then
-  rm -f "$decryptdir"/"$basename".tar.gz
+  if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
+    destination="$decryptdir"/"$basename".tar.gz
+  else
+    destination="$decryptdir"/"$basename".tar
+  fi
+  echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$destination" "$source".gpg
+  source="$destination"
+fi
+
+if [ "$BCS_DISABLECOMPRESS" == "off" ]; then
+  destination="$compressdir"/"$basename".tar
+  pigz -9cd "$source" > "$destination"
+  #gzip -9cd "$source" > "$destination"
+  if [ -n "$BCS_PASSWORD" ]; then
+    rm -f "$source"
+  fi
+  source="$destination"
 fi
 
 if [ "$BCS_VERBOSETAR" == "on" ]; then
@@ -67,11 +77,11 @@ else
   tarargs='-xpM'
 fi
 
-tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh $sourcedir $decryptdir $compressdir" --volno-file "$BCS_TMPFILE" -f "$compressdir"/"$basename".tar --directory "$destdir"
+tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh $sourcedir $decryptdir $compressdir" --volno-file "$BCS_TMPFILE" -f "$source" --directory "$destdir"
 
 vol=$(cat "$BCS_TMPFILE")
 case "$vol" in
-1)     rm "$compressdir"/"$basename".tar
+1)     rm "$source"
        ;;
-*)     rm "$compressdir"/"$basename".tar-"$vol"
+*)     rm "$source"-"$vol"
 esac
