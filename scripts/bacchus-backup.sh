@@ -16,11 +16,13 @@
 # Utilizes these environment variables:
 #	BCS_SOURCE     - Directory to backup
 #	BCS_DEST       - directory location of archive files
-#	BCS_BASENAME   - Base filename for backup archive, appending
-#                  incremental backup volume number
+#	BCS_BASENAME   - Base filename for backup archive
+#	BCS_VOLUMESIZE - Size of each volume in kB
+#	BCS_RAMDISK    - Boolean enabling ramdisk
 #	BCS_TARDIR     - Intermediate area for tar
 #	BCS_COMPRESDIR - Intermediate area to store compressed volume
-#	BCS_VOLUMESIZE - Size of each volume in kB
+#	BCS_COMPRESS   - Boolean enabling compression
+# BCS_VERBOSETAR - Tar shows target filenames backed up
 # BCS_PASSWORD   - Password to encrypt backup archive volumes
 #
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
@@ -30,6 +32,11 @@ scriptdir=$(dirname "$_")
 
 Cleanup()
 {
+  if [[ "$BCS_RAMDISK" == "on" ]]; then
+    sync
+    umount "$BCS_TMPFILE".ramdisk
+    rmdir "$BCS_TMPFILE".ramdisk
+  fi
   if [[ "$BCS_TMPFILE" == *"tmp"* ]]; then
     rm -rf "$BCS_TMPFILE"
   fi
@@ -40,6 +47,22 @@ trap Cleanup EXIT
 
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
   BCS_TARDIR="$BCS_DEST"
+else
+  if [ "$BCS_RAMDISK" == "on" ]; then
+    ramdisk_size=0
+    if [ "$BCS_COMPRESS" == "on" ]; then
+      ramdisk_size="$((ramdisk_size + BCS_VOLUMESIZE))"
+    fi
+    if [ -n "$BCS_PASSWORD" ]; then
+      ramdisk_size="$((ramdisk_size + BCS_VOLUMESIZE))"
+    fi
+    ramdisk_dir="$BCS_TMPFILE".ramdisk
+    ramdisk_size="$(( ((ramdisk_size * 1024) + ((BCS_VOLUMESIZE * 1024) / 100)) ))"
+    mkdir -p "$ramdisk_dir"
+    mount -t tmpfs -o size="$ramdisk_size" tmpfs "$ramdisk_dir"
+    BCS_COMPRESDIR="$ramdisk_dir"
+    BCS_TARDIR="$ramdisk_dir"
+  fi
 fi
 
 if [ "$BCS_VERBOSETAR" == "on" ]; then
@@ -61,5 +84,5 @@ esac
 export TAR_VOLUME=$(expr "$vol" + 1)
 export TAR_SUBCOMMAND="-c"
 export TAR_FD="none"
-"$scriptdir"/bacchus-backup-new-volume.sh "$BCS_DEST" "$BCS_COMPRESDIR"
+"$scriptdir"/bacchus-backup-new-volume.sh
 printf '\n'

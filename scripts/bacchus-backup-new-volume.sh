@@ -8,6 +8,7 @@
 # Utilizes these environment variables:
 #	BCS_DEST       - location to store final volumes
 #	BCS_COMPRESDIR - Intermediate area to store compressed volume
+#	BCS_COMPRESS   - Boolean enabling compression
 # BCS_PASSWORD   - Password to encrypt backup archive volumes
 #
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),

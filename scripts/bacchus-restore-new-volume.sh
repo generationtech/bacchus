@@ -7,15 +7,18 @@
 #
 # Utilizes these environment variables:
 #	BCS_SOURCE     - Directory location of archive files
+#	BCS_BASENAME   - Base filename for backup archive
 #	BCS_DECRYPTDIR - Intermediate area to store unencrypted volume
 #	BCS_COMPRESDIR - Intermediate area to store uncompressed volume
+#	BCS_COMPRESS   - Boolean enabling compression
 # BCS_PASSWORD   - Password to encrypt backup archive volumes
 #
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
 #       Bacchus does not unencrypt backup, and operation will fail if
 #       archive was backed up as encrypted
 
-name=$(expr "$TAR_ARCHIVE" : '\(.*\)-.*')
+tararchivedir=$(dirname "$TAR_ARCHIVE")
+name=$(expr $(basename "$TAR_ARCHIVE") : '\(.*\)-.*')
 vol="${name:-$TAR_ARCHIVE}"-"$TAR_VOLUME"
 filename="${vol##*/}"
 oldname="${TAR_ARCHIVE##*/}"
@@ -61,7 +64,8 @@ fi
 case "$TAR_FD" in
   none) exit 0
         ;;
-  *)    echo "${name:-$TAR_ARCHIVE}"-"$TAR_VOLUME" >&"$TAR_FD"
+  # *)    echo "${name:-$TAR_ARCHIVE}"-"$TAR_VOLUME" >&"$TAR_FD"
+  *)    echo "$tararchivedir/$BCS_BASENAME".tar-"$TAR_VOLUME" >&"$TAR_FD"
 esac
 
 exit 0

@@ -25,14 +25,17 @@ PrintOptions()
   printf 'Source directory:                    %s\n' "$BCS_SOURCE"
   printf 'Destination directory:               %s\n' "$BCS_DEST"
   printf 'Base name for archive:               %s\n' "$BCS_BASENAME"
-  printf 'Use ramdisk for intermediate dirs:   %s\n' "$BCS_RAMDISK"
-
-  if [ "$BCS_COMPRESS" == "on" ]; then
-    if [ "$BCS_COMPRESDIR" != "." ]; then
-      printf 'Intermediate compression directory:  %s\n' "$BCS_COMPRESDIR"
-    fi
+  if [ "$BCS_COMPRESS" == "on" ] || [ -n "$BCS_PASSWORD" ]; then
+    printf 'Use ramdisk for intermediate dirs:   %s\n' "$BCS_RAMDISK"
   else
-      printf 'Compression:                         disabled\n'
+    printf 'Use ramdisk for intermediate dirs:   disabled\n'
+  fi
+
+  if [ "$BCS_COMPRESS" == "on" ] && [ "$BCS_RAMDISK" == "off" ]; then
+    printf 'Intermediate compression directory:  %s\n' "$BCS_COMPRESDIR"
+  fi
+  if [ "$BCS_COMPRESS" == "off" ]; then
+    printf 'Compression:                         disabled\n'
   fi
 
   if [ -z "$BCS_PASSWORD" ]; then
@@ -58,6 +61,9 @@ ConfirmStart()
     read -rsp "Press enter to begin..." confirm
     printf '\n\n'
   fi
+  if [ "$BCS_COMPRESS" == "off" ] || [ -z "$BCS_PASSWORD" ]; then
+    BCS_RAMDISK="off"
+  fi
 }
 
 Backup()
@@ -67,7 +73,7 @@ Backup()
   printf '|| Running Bacchus backup operation ||\n'
   printf ' ====================================\n'
   PrintOptions
-  if [ "$BCS_TARDIR" != "." ]; then
+  if [ "$BCS_RAMDISK" == "off" ] && ([ "$BCS_COMPRESS" == "on" ] || [ -n "$BCS_PASSWORD" ]); then
     printf 'Intermediate tar directory:          %s\n' "$BCS_TARDIR"
   fi
   printf 'Volume size for archive:             %s\n' "$BCS_VOLUMESIZE"
@@ -83,7 +89,7 @@ Restore()
   printf '|| Running Bacchus restore operation ||\n'
   printf ' =====================================\n'
   PrintOptions
-  if [ "$BCS_DECRYPTDIR" != "." ] && [ -n "$BCS_PASSWORD" ]; then
+  if [ -n "$BCS_PASSWORD" ] && [ "$BCS_RAMDISK" == "off" ]; then
     printf 'Intermediate decryption directory:   %s\n' "$BCS_DECRYPTDIR"
   fi
   printf '\n'
