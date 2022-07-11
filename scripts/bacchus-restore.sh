@@ -7,8 +7,8 @@
 # for partial recovery should any individual incremental archive
 # file be damaged.
 #
-# Other similar solutions using encryption result in total data
-# loss of past failed incremental archive file.
+# Other similar solutions using incremental files, compression, and
+# encryption result in total data loss past failed incremental archive file.
 #
 #	Usage:
 #	bacchus-restore.sh
@@ -19,6 +19,7 @@
 #	BCS_BASENAME   - Base filename for backup archive
 #	BCS_VOLUMESIZE - Used LOCALLY here, not from environment
 #	BCS_RAMDISK    - Boolean enabling ramdisk
+#	BCS_TARDIR     - Intermediate area for tar
 #	BCS_DECRYPTDIR - Intermediate area to store unencrypted volume
 #	BCS_COMPRESDIR - Intermediate area to store uncompressed volume
 #	BCS_COMPRESS   - Boolean enabling compression
@@ -40,10 +41,13 @@ Cleanup()
   fi
   if [[ "$BCS_TMPFILE" == *"tmp"* ]]; then
     rm -rf "$BCS_TMPFILE"
+    rm -rf "$BCS_PATHFILE"
   fi
 }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
+export BCS_PATHFILE="$BCS_TMPFILE".dest
+echo "$BCS_SOURCE" > "$BCS_PATHFILE"
 trap Cleanup EXIT
 
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then

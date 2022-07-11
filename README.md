@@ -5,8 +5,8 @@ Allows for creating smaller backups with privacy while allowing
 for partial recovery should any individual incremental archive
 file be damaged.
 
-Other similar solutions using encryption result in total data
-loss past failed incremental archive file.
+Other similar solutions using incremental files, compression, and
+encryption result in total data loss past failed incremental archive file.
 
 ## Help
 

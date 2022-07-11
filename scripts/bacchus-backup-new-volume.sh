@@ -14,6 +14,27 @@
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
 #       bacchus does not encrypt backup
 
+BCS_DEST=$(<"$BCS_PATHFILE")
+while true; do
+  availablespace=$(df -kP "$BCS_DEST" | awk '{print $4}' | tail -1)
+  lowspace="$(( BCS_VOLUMESIZE * BCS_LOWDISKSPACE ))"
+  printf "availablespace %s\n" "$availablespace"
+  printf "lowspace       %s\n" "$lowspace"
+  if [ "$availablespace" -lt "$lowspace" ]; then
+    printf "LOW AVAILABLE SPACE on %s (%s < %s)\n" "$BCS_DEST" "$availablespace" "$lowspace"
+    printf "Either free-up space or swap out storage device and press enter\n"
+    printf "Or enter a new destination path and press enter\n"
+    read newpath
+    printf "\n"
+    if [ -n "$newpath" ]; then
+      BCS_DEST="$newpath"
+      echo "$BCS_DEST" > "$BCS_PATHFILE"
+    fi
+  else
+    break
+  fi
+done
+
 tararchivedir=$(dirname "$TAR_ARCHIVE")
 TAR_ARCHIVE=$(basename "$TAR_ARCHIVE")
 name=$(expr "$TAR_ARCHIVE" : '\(.*\)-.*')

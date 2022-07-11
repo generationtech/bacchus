@@ -7,8 +7,8 @@
 # for partial recovery should any individual incremental archive
 # file be damaged.
 #
-# Other similar solutions using encryption result in total data
-# loss past failed incremental archive file.
+# Other similar solutions using incremental files, compression, and
+# encryption result in total data loss past failed incremental archive file.
 #
 #	Usage:
 #	bacchus-backup.sh
@@ -39,10 +39,13 @@ Cleanup()
   fi
   if [[ "$BCS_TMPFILE" == *"tmp"* ]]; then
     rm -rf "$BCS_TMPFILE"
+    rm -rf "$BCS_PATHFILE"
   fi
 }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
+export BCS_PATHFILE="$BCS_TMPFILE".dest
+echo "$BCS_DEST" > "$BCS_PATHFILE"
 trap Cleanup EXIT
 
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
@@ -74,6 +77,9 @@ fi
 tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchus-backup-new-volume.sh" -L "$BCS_VOLUMESIZE" --volno-file "$BCS_TMPFILE" -f "$BCS_TARDIR"/"$BCS_BASENAME".tar $BCS_SOURCE
 
 # Setup tar variables to call new-volume script for handling last (or possibly only) archive volume
+if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
+  BCS_TARDIR=$(<"$BCS_PATHFILE")
+fi
 vol=$(cat "$BCS_TMPFILE")
 case "$vol" in
   1)  export TAR_ARCHIVE="$BCS_TARDIR"/"$BCS_BASENAME".tar

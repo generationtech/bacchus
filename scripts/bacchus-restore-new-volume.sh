@@ -25,15 +25,32 @@ oldname="${TAR_ARCHIVE##*/}"
 
 echo "$filename"
 
-source="$BCS_SOURCE"/"$filename"
-if [ "$BCS_COMPRESS" == "on" ]; then
-  source="$source".gz
-  rm -f "$BCS_COMPRESDIR"/"$oldname"
-fi
-if [ -n "$BCS_PASSWORD" ]; then
-  source="$source".gpg
-  rm -f "$BCS_DECRYPTDIR"/"$oldname"
-fi
+BCS_SOURCE=$(<"$BCS_PATHFILE")
+while true; do
+  source="$BCS_SOURCE"/"$filename"
+  if [ "$BCS_COMPRESS" == "on" ]; then
+    source="$source".gz
+    rm -f "$BCS_COMPRESDIR"/"$oldname"
+  fi
+  if [ -n "$BCS_PASSWORD" ]; then
+    source="$source".gpg
+    rm -f "$BCS_DECRYPTDIR"/"$oldname"
+  fi
+
+  if [ ! -f "$source" ]; then
+    printf "Archive volume %s NOT FOUND in %s\n" $(basename "$source") "$BCS_SOURCE"
+    printf "Either place this file in the source directory and press enter\n"
+    printf "Or enter a new source path and press enter\n"
+    read newpath
+    printf "\n"
+    if [ -n "$newpath" ]; then
+      BCS_SOURCE="$newpath"
+      echo "$BCS_SOURCE" > "$BCS_PATHFILE"
+    fi
+  else
+    break
+  fi
+done
 
 case "$TAR_SUBCOMMAND" in
   -x) test -r "$source" || exit 1
