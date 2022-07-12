@@ -18,8 +18,6 @@ BCS_DEST=$(<"$BCS_PATHFILE")
 while true; do
   availablespace=$(df -kP "$BCS_DEST" | awk '{print $4}' | tail -1)
   lowspace="$(( BCS_VOLUMESIZE * BCS_LOWDISKSPACE ))"
-  printf "availablespace %s\n" "$availablespace"
-  printf "lowspace       %s\n" "$lowspace"
   if [ "$availablespace" -lt "$lowspace" ]; then
     printf "LOW AVAILABLE SPACE on %s (%s < %s)\n" "$BCS_DEST" "$availablespace" "$lowspace"
     printf "Either free-up space or swap out storage device and press enter\n"

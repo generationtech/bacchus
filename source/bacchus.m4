@@ -19,8 +19,7 @@ export BCS_COMPRESS="$_arg_compress"
 export BCS_DECRYPTDIR="$_arg_decryptdir"
 export BCS_VERBOSETAR="$_arg_verbosetar"
 export BCS_PASSWORD="$password"
-# export BCS_LOWDISKSPACE=5230
-export BCS_LOWDISKSPACE=1385
+export BCS_LOWDISKSPACE=2
 
 PrintOptions()
 {
