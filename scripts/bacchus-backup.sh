@@ -32,22 +32,26 @@ scriptdir=$(dirname "$_")
 
 Cleanup()
 {
+  printf "\nOperation shutting down - cleanup process started\n"
   if [[ "$BCS_RAMDISK" == "on" ]]; then
     sync
-    umount "$BCS_TMPFILE".ramdisk
+    until umount "$BCS_TMPFILE".ramdisk
+    do
+      sleep 2
+      echo "Unmount ramdisk failed, retrying"
+    done
     rmdir "$BCS_TMPFILE".ramdisk
   fi
   if [[ "$BCS_TMPFILE" == *"tmp"* ]]; then
     rm -rf "$BCS_TMPFILE"
-    rm -rf "$BCS_PATHFILE"
+    rm -rf "$BCS_DATAFILE"
   fi
 }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
-export BCS_PATHFILE="$BCS_TMPFILE".dest
-echo "$BCS_DEST" > "$BCS_PATHFILE"
 trap Cleanup EXIT
 
+# Create ramdisk sized based on archive volume size
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
   BCS_TARDIR="$BCS_DEST"
 else
@@ -68,17 +72,40 @@ else
   fi
 fi
 
+# Estimate total backup size and required archive volumes
+if [ "$BCS_ESTIMATE" == "on" ]; then
+  printf 'Estimating total size of:  %s\n' "$BCS_SOURCE"
+  total_source_size=$(du -sk $BCS_SOURCE | awk '{print $1}')
+  printf 'Total size:                %sk\n' "$total_source_size"
+  total_volumes=$(( $total_source_size / $BCS_VOLUMESIZE ))
+  if [[ $(( $BCS_VOLUMESIZE * $total_volumes )) -lt $total_source_size ]]; then
+    total_volumes=$(( $total_volumes + 1 ))
+  fi
+  printf 'Number of archive volumes: %s (%sk each)\n' "$total_volumes" "$BCS_VOLUMESIZE"
+fi
+
+# Populate external data structure with starting values
+export BCS_DATAFILE="$BCS_TMPFILE".dest
+timestamp="$(date +%s)"
+runtime_data=$(jo bcs_dest="$BCS_DEST" \
+                  start_timestamp="$timestamp" \
+                  last_timestamp="$timestamp" \
+                  source_size=$total_source_size \
+                  archive_size=0 \
+                  archive_volumes=$total_volumes)
+echo "$runtime_data" > "$BCS_DATAFILE"
+
+# Run tar backup
 if [ "$BCS_VERBOSETAR" == "on" ]; then
   tarargs='-cpMv'
 else
   tarargs='-cpM'
 fi
-
 tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchus-backup-new-volume.sh" -L "$BCS_VOLUMESIZE" --volno-file "$BCS_TMPFILE" -f "$BCS_TARDIR"/"$BCS_BASENAME".tar $BCS_SOURCE
 
 # Setup tar variables to call new-volume script for handling last (or possibly only) archive volume
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
-  BCS_TARDIR=$(<"$BCS_PATHFILE")
+  BCS_TARDIR=$(<"$BCS_DATAFILE")
 fi
 vol=$(cat "$BCS_TMPFILE")
 case "$vol" in

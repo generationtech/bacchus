@@ -17,6 +17,7 @@
 # ARG_OPTIONAL_BOOLEAN([revealpassword],[R],[echo optional password on screen],[off])
 # ARG_OPTIONAL_BOOLEAN([verbosetar],[T],[show tar verbose],[off])
 # ARG_OPTIONAL_BOOLEAN([confirm],[C],[confirm before starting operation],[on])
+# ARG_OPTIONAL_BOOLEAN([estimate],[E],[estimate total time needed for operation],[on])
 # ARG_DEFAULTS_POS()
 # ARG_HELP([Bacchus is a backup/resture program using tar, pigz, and gpg for ad-hoc data backups])
 # ARGBASH_SET_INDENT([  ])
@@ -39,7 +40,7 @@ die()
 
 begins_with_short_option()
 {
-  local first_option all_short_options='sdbvrtczeufpRTCh'
+  local first_option all_short_options='sdbvrtczeufpRTCEh'
   first_option="${1:0:1}"
   test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
 }
@@ -63,12 +64,13 @@ _arg_commandpassword=
 _arg_revealpassword="off"
 _arg_verbosetar="off"
 _arg_confirm="on"
+_arg_estimate="on"
 
 
 print_help()
 {
   printf '%s\n' "Bacchus is a backup/resture program using tar, pigz, and gpg for ad-hoc data backups"
-  printf 'Usage: %s [-s|--source <arg>] [-d|--dest <arg>] [-b|--basename <arg>] [-v|--volumesize <arg>] [-r|--(no-)ramdisk] [-t|--tardir <arg>] [-c|--compressdir <arg>] [-z|--(no-)compress] [-e|--decryptdir <arg>] [-u|--(no-)userpassword] [-f|--filepassword <arg>] [-p|--commandpassword <arg>] [-R|--(no-)revealpassword] [-T|--(no-)verbosetar] [-C|--(no-)confirm] [-h|--help] <subcommand>\n' "$0"
+  printf 'Usage: %s [-s|--source <arg>] [-d|--dest <arg>] [-b|--basename <arg>] [-v|--volumesize <arg>] [-r|--(no-)ramdisk] [-t|--tardir <arg>] [-c|--compressdir <arg>] [-z|--(no-)compress] [-e|--decryptdir <arg>] [-u|--(no-)userpassword] [-f|--filepassword <arg>] [-p|--commandpassword <arg>] [-R|--(no-)revealpassword] [-T|--(no-)verbosetar] [-C|--(no-)confirm] [-E|--(no-)estimate] [-h|--help] <subcommand>\n' "$0"
   printf '\t%s\n' "<subcommand>: backup or restore"
   printf '\t%s\n' "-s, --source: source directory (default: '.')"
   printf '\t%s\n' "-d, --dest: destination directory (default: '.')"
@@ -85,6 +87,7 @@ print_help()
   printf '\t%s\n' "-R, --revealpassword, --no-revealpassword: echo optional password on screen (off by default)"
   printf '\t%s\n' "-T, --verbosetar, --no-verbosetar: show tar verbose (off by default)"
   printf '\t%s\n' "-C, --confirm, --no-confirm: confirm before starting operation (on by default)"
+  printf '\t%s\n' "-E, --estimate, --no-estimate: estimate total time needed for operation (on by default)"
   printf '\t%s\n' "-h, --help: Prints help"
 }
 
@@ -238,6 +241,18 @@ parse_commandline()
         if test -n "$_next" -a "$_next" != "$_key"
         then
           { begins_with_short_option "$_next" && shift && set -- "-C" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
+        fi
+        ;;
+      -E|--no-estimate|--estimate)
+        _arg_estimate="on"
+        test "${1:0:5}" = "--no-" && _arg_estimate="off"
+        ;;
+      -E*)
+        _arg_estimate="on"
+        _next="${_key##-E}"
+        if test -n "$_next" -a "$_next" != "$_key"
+        then
+          { begins_with_short_option "$_next" && shift && set -- "-E" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
         fi
         ;;
       -h|--help)

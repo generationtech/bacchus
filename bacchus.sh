@@ -20,12 +20,14 @@ export BCS_DECRYPTDIR="$_arg_decryptdir"
 export BCS_VERBOSETAR="$_arg_verbosetar"
 export BCS_PASSWORD="$password"
 export BCS_LOWDISKSPACE=2
+export BCS_ESTIMATE="$_arg_estimate"
 
 PrintOptions()
 {
   printf 'Source directory:                    %s\n' "$BCS_SOURCE"
   printf 'Destination directory:               %s\n' "$BCS_DEST"
   printf 'Base name for archive:               %s\n' "$BCS_BASENAME"
+  printf 'Estimate size and duration:          %s\n' "$BCS_ESTIMATE"
   if [ "$BCS_COMPRESS" == "on" ] || [ -n "$BCS_PASSWORD" ]; then
     printf 'Use ramdisk for intermediate dirs:   %s\n' "$BCS_RAMDISK"
   else
