@@ -31,7 +31,7 @@ Duration_Readable()
     fi
     string_date+="${hours}h"
   fi
-  remainder=$(( remainder - ($hours*3600) ))
+  remainder=$(( remainder - (hours*3600) ))
 
   minutes=$(( remainder/60 ))
   if [ $minutes -gt 0 ]; then
@@ -40,7 +40,7 @@ Duration_Readable()
     fi
     string_date+="${minutes}m"
   fi
-  remainder=$(( remainder - ($minutes*60) ))
+  remainder=$(( remainder - (minutes*60) ))
 
   if [ $remainder -gt 0 ]; then
     if [ -n "$string_date" ]; then
@@ -93,13 +93,71 @@ while true; do
   fi
 done
 
+if [ "$BCS_STATISTICS" == "on" ] && [ "$BCS_RUNSTATISTICS" == "on" ]; then
+  # Compute & output incremntal statistics
+  archive_max_name=$(( ${#BCS_BASENAME} + ${#archive_volumes} + 5 ))
+  archive_max_num=$(( ${#archive_volumes} + 1 ))
+
+  source_size_text=${#source_size_total}
+  max_source_size_text=$(( source_size_text + (source_size_text / 3) + 9 ))
+  source_size_running_text=$(printf "%'.0f" "$source_size_running")
+
+  completion_timestamp="$(date +%s)"
+  diff_time=$(( completion_timestamp - start_timestamp ))
+
+  if [ "$source_size_running" -ne 0 ]; then
+    avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 2) ) ))
+    remain_time=$(( (avg_archive_time * (archive_volumes - TAR_VOLUME + 2) ) ))
+    last_time=$(( completion_timestamp - last_timestamp ))
+    dest_size=$(du -c "$bcs_dest"/"$BCS_BASENAME"* | tail -1 | awk '{ print $1 }')
+    comp_ratio=$(( 100 - ( ( dest_size * 100) / source_size_running ) ))
+  else
+    avg_archive_time=0
+    remain_time=0
+    last_time=0
+    dest_size=0
+    comp_ratio=0
+  fi
+
+  dest_size_text=$(printf "%'.0f" "$dest_size")
+
+# Don't hate me for being ugly
+  printf "\
+%-${archive_max_name}s \
+%${archive_max_num}s \
+%4s  \
+%-18s \
+%-18s \
+%-10s \
+%-10s \
+%-11s \
+%-${max_source_size_text}s  \
+%-${max_source_size_text}s \
+%(%m-%d-%Y %H:%M:%S)T\n" \
+    "$TAR_ARCHIVE" \
+    "/$archive_volumes" \
+    "$(( ( (TAR_VOLUME - 1) * 100) / archive_volumes ))%" \
+    "remain..$( Duration_Readable $remain_time )" \
+    "elapsed..$( Duration_Readable $diff_time )" \
+    "last..$( Duration_Readable $last_time )" \
+    "avg..$( Duration_Readable $avg_archive_time )" \
+    "compr..${comp_ratio}%" \
+    "source..${source_size_running_text}k" \
+    "dest..${dest_size_text}k" \
+    "$completion_timestamp"
+else
+  printf '%s\n' "$TAR_ARCHIVE"
+fi
+
 # Source and Destination variables flow through following sections
 source="$tararchivedir"/"$TAR_ARCHIVE"
 destination="$bcs_dest"/"$TAR_ARCHIVE"
 
 archive_source_size=$(stat -c %s "$source")
 archive_source_size_scaled=$(( archive_source_size / 1024 ))
-source_size_running=$(( $source_size_running + $archive_source_size_scaled ))
+source_size_running=$(( source_size_running + archive_source_size_scaled ))
+
+last_timestamp="$(date +%s)"
 
 # Commpression if enabled
 if [ "$BCS_COMPRESS" == "on" ]; then
@@ -120,67 +178,29 @@ if [ -n "$BCS_PASSWORD" ]; then
   rm -f "$source"
 fi
 
-# Compute & output incremntal statistics
-archive_max_name=$(( ${#BCS_BASENAME} + `expr length "$archive_volumes"` + 5 ))
-archive_max_num=$(( `expr length "$archive_volumes"` + 1 ))
-
-source_size_text=`expr length "$source_size_total"`
-max_source_size_text=$(( source_size_text + (source_size_text / 3) + 9 ))
-source_size_running_text=`printf "%'.0f" $source_size_running`
-
-dest_size=$(du -c "$bcs_dest"/"$BCS_BASENAME"* | tail -1 | awk '{ print $1 }')
-dest_size_text=`printf "%'.0f" $dest_size`
-
-completion_timestamp="$(date +%s)"
-diff_time=$(( completion_timestamp - start_timestamp ))
-avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 1) ) ))
-remain_time=$(( (avg_archive_time * (archive_volumes - TAR_VOLUME + 1) ) ))
-
-printf "\
-%-${archive_max_name}s \
-%${archive_max_num}s \
-%6s  \
-%-18s \
-%-18s \
-%-10s \
-%-10s \
-%-11s \
-%-${max_source_size_text}s \
-%-${max_source_size_text}s \
-%(%m-%d-%Y %H:%M:%S)T\n" \
-    "$TAR_ARCHIVE" \
-    "/$archive_volumes" \
-    "($(( ((TAR_VOLUME - 1) * 100) / archive_volumes ))%)" \
-    "remain($( Duration_Readable $remain_time ))" \
-    "elapsed($( Duration_Readable $diff_time ))" \
-    "last($( Duration_Readable $(( $completion_timestamp - $last_timestamp )) ))" \
-    "avg($( Duration_Readable $avg_archive_time ))" \
-    "compr($(( 100 - ( ( dest_size * 100) / source_size_running ) ))%)" \
-    "source(${source_size_running_text}k)" \
-    "dest(${dest_size_text}k)" \
-    "$completion_timestamp"
-
 # Update tar archive volume # counter
 tarnew="$tararchivedir"/"$vol"
 case "$TAR_FD" in
-  none) completion_timestamp="$(date +%s)"
-        diff_time=$(( completion_timestamp - start_timestamp ))
-        avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 1) ) ))
+  none) if [ "$BCS_STATISTICS" == "on" ] && [ "$BCS_ENDSTATISTICS" == "on" ]; then
+          completion_timestamp="$(date +%s)"
+          diff_time=$(( completion_timestamp - start_timestamp ))
+          avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 1) ) ))
 
-        source_size_running_text=`printf "%'.0f" $source_size_running`
+          source_size_running_text=$(printf "%'.0f" "$source_size_running")
 
-        dest_size=$(du -c "$bcs_dest"/"$BCS_BASENAME"* | tail -1 | awk '{ print $1 }')
-        dest_size_text=`printf "%'.0f" $dest_size`
+          dest_size=$(du -c "$bcs_dest"/"$BCS_BASENAME"* | tail -1 | awk '{ print $1 }')
+          dest_size_text=$(printf "%'.0f" "$dest_size")
 
-        comp_ratio=$(( 100 - ( ( dest_size * 100) / source_size_running ) ))
+          comp_ratio=$(( 100 - ( ( dest_size * 100) / source_size_running ) ))
 
-        printf '\nBACKUP OPERATION COMPLETE\n'
-        printf 'Total runtime:                 %s\n' "$( Duration_Readable $diff_time )"
-        printf 'Average time per archive file: %s\n' "$( Duration_Readable $avg_archive_time )"
-        printf 'Number of archive files:       %s\n' "$(( TAR_VOLUME - 1 ))"
-        printf 'Total space backed up:         %sk\n' "$source_size_running_text"
-        printf 'Total space on destination:    %sk\n' "$dest_size_text"
-        printf 'Overall compression ratio:     %s%%\n' "$comp_ratio"
+          printf '\nBACKUP OPERATION COMPLETE\n'
+          printf 'Total runtime:                 %s\n' "$( Duration_Readable $diff_time )"
+          printf 'Average time per archive file: %s\n' "$( Duration_Readable $avg_archive_time )"
+          printf 'Number of archive files:       %s\n' "$(( TAR_VOLUME - 1 ))"
+          printf 'Total space backed up:         %sk\n' "$source_size_running_text"
+          printf 'Total space on destination:    %sk\n' "$dest_size_text"
+          printf 'Overall compression ratio:     %s%%\n' "$comp_ratio"
+        fi
 
         exit 0
         ;;
@@ -189,7 +209,6 @@ case "$TAR_FD" in
 esac
 
 # Update runtime data to persistence file
-last_timestamp="$(date +%s)"
 runtime_data=$(jo bcs_dest="$bcs_dest" \
                   start_timestamp="$start_timestamp" \
                   last_timestamp="$last_timestamp" \

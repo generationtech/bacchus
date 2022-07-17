@@ -20,6 +20,9 @@ exit 11  #)Created by argbash-init v2.10.0
 # ARG_OPTIONAL_BOOLEAN([verbosetar], [T], [show tar verbose], off)
 # ARG_OPTIONAL_BOOLEAN([confirm], [C], [confirm before starting operation], on)
 # ARG_OPTIONAL_BOOLEAN([estimate], [E], [estimate total time needed for operation], on)
+# ARG_OPTIONAL_BOOLEAN([statistics], [S], [show all statistics], on)
+# ARG_OPTIONAL_BOOLEAN([runstatistics], [W], [show running statistics], on)
+# ARG_OPTIONAL_BOOLEAN([endstatistics], [X], [show operation end statistics], on)
 # ARG_DEFAULTS_POS
 # ARG_HELP([Bacchus is a backup/resture program using tar, pigz, and gpg for ad-hoc data backups])
 # ARGBASH_SET_INDENT([  ])

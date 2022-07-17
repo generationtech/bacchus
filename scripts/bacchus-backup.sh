@@ -40,11 +40,9 @@ Cleanup()
       sleep 2
       echo "Unmount ramdisk failed, retrying"
     done
-    rmdir "$BCS_TMPFILE".ramdisk
   fi
   if [[ "$BCS_TMPFILE" == *"tmp"* ]]; then
-    rm -rf "$BCS_TMPFILE"
-    rm -rf "$BCS_DATAFILE"
+    rm -rf "$BCS_TMPFILE"*
   fi
 }
 
@@ -75,18 +73,18 @@ fi
 # Estimate total backup size and required archive volumes
 if [ "$BCS_ESTIMATE" == "on" ]; then
   printf 'Estimating total size of:  %s\n\n' "$BCS_SOURCE"
-  total_source_size=$(du -sk $BCS_SOURCE | awk '{print $1}')
+  total_source_size=$(du -sk --apparent-size "$BCS_SOURCE" | awk '{print $1}')
   printf "Total size:                %'.0fk\n" "$total_source_size"
-  total_volumes=$(( $total_source_size / $BCS_VOLUMESIZE ))
-  if [[ $(( $BCS_VOLUMESIZE * $total_volumes )) -lt $total_source_size ]]; then
-    total_volumes=$(( $total_volumes + 1 ))
+  total_volumes=$(( total_source_size / BCS_VOLUMESIZE ))
+  if [[ $(( BCS_VOLUMESIZE * total_volumes )) -lt $total_source_size ]]; then
+    total_volumes=$(( total_volumes + 1 ))
   fi
-  printf 'Number of archive volumes: %s (%sk each)\n' "$total_volumes" "$BCS_VOLUMESIZE"
+  printf "Number of archive volumes: %s (%'.0fk each)\n" "$total_volumes" "$BCS_VOLUMESIZE"
 fi
 printf '\n'
 
 # Populate external data structure with starting values
-export BCS_DATAFILE="$BCS_TMPFILE".dest
+export BCS_DATAFILE="$BCS_TMPFILE".runtime
 timestamp="$(date +%s)"
 runtime_data=$(jo bcs_dest="$BCS_DEST" \
                   start_timestamp="$timestamp" \
@@ -102,14 +100,14 @@ if [ "$BCS_VERBOSETAR" == "on" ]; then
 else
   tarargs='-cpM'
 fi
-tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchus-backup-new-volume.sh" -L "$BCS_VOLUMESIZE" --volno-file "$BCS_TMPFILE" -f "$BCS_TARDIR"/"$BCS_BASENAME".tar $BCS_SOURCE
+tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchus-backup-new-volume.sh" -L "$BCS_VOLUMESIZE" --volno-file "$BCS_TMPFILE".volno -f "$BCS_TARDIR"/"$BCS_BASENAME".tar $BCS_SOURCE
 
 # Setup tar variables to call new-volume script for handling last (or possibly only) archive volume
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
   runtime_data=$(<"$BCS_DATAFILE")
   BCS_TARDIR=$(echo "$runtime_data" | jq -r '.bcs_dest')
 fi
-vol=$(cat "$BCS_TMPFILE")
+vol=$(cat "$BCS_TMPFILE".volno)
 case "$vol" in
   1)  export TAR_ARCHIVE="$BCS_TARDIR"/"$BCS_BASENAME".tar
       ;;

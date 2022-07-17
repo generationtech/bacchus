@@ -18,6 +18,9 @@
 # ARG_OPTIONAL_BOOLEAN([verbosetar],[T],[show tar verbose],[off])
 # ARG_OPTIONAL_BOOLEAN([confirm],[C],[confirm before starting operation],[on])
 # ARG_OPTIONAL_BOOLEAN([estimate],[E],[estimate total time needed for operation],[on])
+# ARG_OPTIONAL_BOOLEAN([statistics],[S],[show all statistics],[on])
+# ARG_OPTIONAL_BOOLEAN([runstatistics],[W],[show running statistics],[on])
+# ARG_OPTIONAL_BOOLEAN([endstatistics],[X],[show operation end statistics],[on])
 # ARG_DEFAULTS_POS()
 # ARG_HELP([Bacchus is a backup/resture program using tar, pigz, and gpg for ad-hoc data backups])
 # ARGBASH_SET_INDENT([  ])
@@ -40,7 +43,7 @@ die()
 
 begins_with_short_option()
 {
-  local first_option all_short_options='sdbvrtczeufpRTCEh'
+  local first_option all_short_options='sdbvrtczeufpRTCESWXh'
   first_option="${1:0:1}"
   test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
 }
@@ -65,12 +68,15 @@ _arg_revealpassword="off"
 _arg_verbosetar="off"
 _arg_confirm="on"
 _arg_estimate="on"
+_arg_statistics="on"
+_arg_runstatistics="on"
+_arg_endstatistics="on"
 
 
 print_help()
 {
   printf '%s\n' "Bacchus is a backup/resture program using tar, pigz, and gpg for ad-hoc data backups"
-  printf 'Usage: %s [-s|--source <arg>] [-d|--dest <arg>] [-b|--basename <arg>] [-v|--volumesize <arg>] [-r|--(no-)ramdisk] [-t|--tardir <arg>] [-c|--compressdir <arg>] [-z|--(no-)compress] [-e|--decryptdir <arg>] [-u|--(no-)userpassword] [-f|--filepassword <arg>] [-p|--commandpassword <arg>] [-R|--(no-)revealpassword] [-T|--(no-)verbosetar] [-C|--(no-)confirm] [-E|--(no-)estimate] [-h|--help] <subcommand>\n' "$0"
+  printf 'Usage: %s [-s|--source <arg>] [-d|--dest <arg>] [-b|--basename <arg>] [-v|--volumesize <arg>] [-r|--(no-)ramdisk] [-t|--tardir <arg>] [-c|--compressdir <arg>] [-z|--(no-)compress] [-e|--decryptdir <arg>] [-u|--(no-)userpassword] [-f|--filepassword <arg>] [-p|--commandpassword <arg>] [-R|--(no-)revealpassword] [-T|--(no-)verbosetar] [-C|--(no-)confirm] [-E|--(no-)estimate] [-S|--(no-)statistics] [-W|--(no-)runstatistics] [-X|--(no-)endstatistics] [-h|--help] <subcommand>\n' "$0"
   printf '\t%s\n' "<subcommand>: backup or restore"
   printf '\t%s\n' "-s, --source: source directory (default: '.')"
   printf '\t%s\n' "-d, --dest: destination directory (default: '.')"
@@ -88,6 +94,9 @@ print_help()
   printf '\t%s\n' "-T, --verbosetar, --no-verbosetar: show tar verbose (off by default)"
   printf '\t%s\n' "-C, --confirm, --no-confirm: confirm before starting operation (on by default)"
   printf '\t%s\n' "-E, --estimate, --no-estimate: estimate total time needed for operation (on by default)"
+  printf '\t%s\n' "-S, --statistics, --no-statistics: show all statistics (on by default)"
+  printf '\t%s\n' "-W, --runstatistics, --no-runstatistics: show running statistics (on by default)"
+  printf '\t%s\n' "-X, --endstatistics, --no-endstatistics: show operation end statistics (on by default)"
   printf '\t%s\n' "-h, --help: Prints help"
 }
 
@@ -253,6 +262,42 @@ parse_commandline()
         if test -n "$_next" -a "$_next" != "$_key"
         then
           { begins_with_short_option "$_next" && shift && set -- "-E" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
+        fi
+        ;;
+      -S|--no-statistics|--statistics)
+        _arg_statistics="on"
+        test "${1:0:5}" = "--no-" && _arg_statistics="off"
+        ;;
+      -S*)
+        _arg_statistics="on"
+        _next="${_key##-S}"
+        if test -n "$_next" -a "$_next" != "$_key"
+        then
+          { begins_with_short_option "$_next" && shift && set -- "-S" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
+        fi
+        ;;
+      -W|--no-runstatistics|--runstatistics)
+        _arg_runstatistics="on"
+        test "${1:0:5}" = "--no-" && _arg_runstatistics="off"
+        ;;
+      -W*)
+        _arg_runstatistics="on"
+        _next="${_key##-W}"
+        if test -n "$_next" -a "$_next" != "$_key"
+        then
+          { begins_with_short_option "$_next" && shift && set -- "-W" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
+        fi
+        ;;
+      -X|--no-endstatistics|--endstatistics)
+        _arg_endstatistics="on"
+        test "${1:0:5}" = "--no-" && _arg_endstatistics="off"
+        ;;
+      -X*)
+        _arg_endstatistics="on"
+        _next="${_key##-X}"
+        if test -n "$_next" -a "$_next" != "$_key"
+        then
+          { begins_with_short_option "$_next" && shift && set -- "-X" "-${_next}" "$@"; } || die "The short option '$_key' can't be decomposed to ${_key:0:2} and -${_key:2}, because ${_key:0:2} doesn't accept value and '-${_key:2:1}' doesn't correspond to a short option."
         fi
         ;;
       -h|--help)

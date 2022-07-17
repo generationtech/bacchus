@@ -21,6 +21,9 @@ export BCS_VERBOSETAR="$_arg_verbosetar"
 export BCS_PASSWORD="$password"
 export BCS_LOWDISKSPACE=2
 export BCS_ESTIMATE="$_arg_estimate"
+export BCS_STATISTICS="$_arg_statistics"
+export BCS_RUNSTATISTICS="$_arg_runstatistics"
+export BCS_ENDSTATISTICS="$_arg_endstatistics"
 
 PrintOptions()
 {
@@ -28,6 +31,7 @@ PrintOptions()
   printf 'Destination directory:               %s\n' "$BCS_DEST"
   printf 'Base name for archive:               %s\n' "$BCS_BASENAME"
   printf 'Estimate size and duration:          %s\n' "$BCS_ESTIMATE"
+  printf 'Show detailed statistics:            %s\n' "$BCS_STATISTICS"
   if [ "$BCS_COMPRESS" == "on" ] || [ -n "$BCS_PASSWORD" ]; then
     printf 'Use ramdisk for intermediate dirs:   %s\n' "$BCS_RAMDISK"
   else
@@ -79,7 +83,7 @@ Backup()
   if [ "$BCS_RAMDISK" == "off" ] && ([ "$BCS_COMPRESS" == "on" ] || [ -n "$BCS_PASSWORD" ]); then
     printf 'Intermediate tar directory:          %s\n' "$BCS_TARDIR"
   fi
-  printf 'Volume size for archive:             %s\n' "$BCS_VOLUMESIZE"
+  printf "Volume size for archive:             %'.0fk\n" "$BCS_VOLUMESIZE"
   printf '\n'
   ConfirmStart
   "${script_dir}"/bacchus-backup.sh
