@@ -16,12 +16,12 @@
 
 # Pull current runtime data from persistence file
 runtime_data=$(<"$BCS_DATAFILE")
-bcs_dest=$(echo $runtime_data        | jq -r '.bcs_dest')
-start_timestamp=$(echo $runtime_data | jq -r '.start_timestamp')
-last_timestamp=$(echo $runtime_data  | jq -r '.last_timestamp')
-source_size=$(echo $runtime_data     | jq -r '.source_size')
-archive_size=$(echo $runtime_data    | jq -r '.archive_size')
-archive_volumes=$(echo $runtime_data | jq -r '.archive_volumes')
+bcs_dest=$(echo "$runtime_data"        | jq -r '.bcs_dest')
+start_timestamp=$(echo "$runtime_data" | jq -r '.start_timestamp')
+last_timestamp=$(echo "$runtime_data"  | jq -r '.last_timestamp')
+source_size=$(echo "$runtime_data"     | jq -r '.source_size')
+archive_size=$(echo "$runtime_data"    | jq -r '.archive_size')
+archive_volumes=$(echo "$runtime_data" | jq -r '.archive_volumes')
 
 # Compute new archive volume details
 tararchivedir=$(dirname "$TAR_ARCHIVE")
@@ -45,7 +45,7 @@ while true; do
     printf "LOW AVAILABLE SPACE on %s (%s < %s)\n" "$bcs_dest" "$availablespace" "$lowspace"
     printf "Either free-up space or swap out storage device and press enter\n"
     printf "Or enter a new destination path and press enter\n"
-    read newpath
+    read -r newpath
     printf "\n"
     if [ -n "$newpath" ]; then
       bcs_dest="$newpath"
@@ -86,19 +86,63 @@ case "$TAR_FD" in
   *)    echo "$tarnew" >&"$TAR_FD"
 esac
 
+
+Elapsed_Readable()
+{
+  string_date=""
+
+  days=$(( $1/3600/24 ))
+  if [ $days -gt 0 ]; then
+    string_date+="${days}d"
+  fi
+  remainder=$(( $1 - (days*3600*24) ))
+
+  hours=$(( remainder/3600 ))
+  if [ $hours -gt 0 ]; then
+    if [ -n "$string_date" ]; then
+      string_date+=":"
+    fi
+    string_date+="${hours}h"
+  fi
+  remainder=$(( remainder - ($hours*3600) ))
+
+  minutes=$(( remainder/60 ))
+  if [ $minutes -gt 0 ]; then
+    if [ -n "$string_date" ]; then
+      string_date+=":"
+    fi
+    string_date+="${minutes}m"
+  fi
+  remainder=$(( remainder - ($minutes*60) ))
+
+  if [ $remainder -gt 0 ]; then
+    if [ -n "$string_date" ]; then
+      string_date+=":"
+    fi
+    string_date+="${remainder}s"
+  fi
+
+  printf "%s" "$string_date"
+}
+
+
 # Compute & output statistics
 archive_volume_size=$(stat -c %s "$destination")
 archive_size=$(( archive_size + (archive_volume_size / 1024) ))
 completion_timestamp="$(date +%s)"
+diff_time=$(( completion_timestamp - start_timestamp ))
+avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 1) ) ))
+remain_time=$(( (avg_archive_time * (archive_volumes - TAR_VOLUME - 1) ) ))
 
-printf '%s of %s (%s%%) remaining(%s) elapsed(%s) last(%s) avg(%s)\n' \
+printf '%s\tof %s (%s%%)\tremain(%s)\telapsed(%s)\tlast(%s)\tavg(%s)\tcompr(%s%%)\n' \
   "$TAR_ARCHIVE" \
   "$archive_volumes" \
   $(( ((TAR_VOLUME - 1) * 100) / archive_volumes )) \
-  $(eval "echo $(date -ud "@$(( (($completion_timestamp - $start_timestamp) / (TAR_VOLUME - 1)) * ($archive_volumes - (TAR_VOLUME - 1)) ))" +'$((%s/3600/24))d:%Hh:%Mm:%Ss')") \
-  $(eval "echo $(date -ud "@$(( $completion_timestamp - $start_timestamp ))" +'$((%s/3600/24))d:%Hh:%Mm:%Ss')") \
-  $(eval "echo $(date -ud "@$(( $completion_timestamp - $last_timestamp ))" +'$((%s/3600/24))d:%Hh:%Mm:%Ss')") \
-  $(eval "echo $(date -ud "@$(( ($completion_timestamp - $start_timestamp) / (TAR_VOLUME - 1) ))" +'$((%s/3600/24))d:%Hh:%Mm:%Ss')")
+  $( Elapsed_Readable $remain_time ) \
+  $( Elapsed_Readable $diff_time ) \
+  $( Elapsed_Readable $(( $completion_timestamp - $last_timestamp )) ) \
+  $( Elapsed_Readable $avg_archive_time ) \
+  $(( 100 - ( ($(du -c /mnt/disk1/backup/test/test.tar* | tail -1 | awk '{ print $1 }') * 100) / (BCS_VOLUMESIZE * (TAR_VOLUME - 1) ) ) ))
 
 # Update runtime data to persistence file
 last_timestamp="$(date +%s)"
