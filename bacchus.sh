@@ -62,7 +62,7 @@ ConfirmStart()
 {
   if [ "$_arg_confirm" == "on" ]; then
     read -rsp "Press enter to begin..." confirm
-    printf '\n\n'
+    printf '\n'
   fi
   if [ "$BCS_COMPRESS" == "off" ] || [ -z "$BCS_PASSWORD" ]; then
     BCS_RAMDISK="off"

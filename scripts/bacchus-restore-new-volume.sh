@@ -38,7 +38,7 @@ while true; do
   fi
 
   if [ ! -f "$source" ]; then
-    printf "Archive volume %s NOT FOUND in %s\n" $(basename "$source") "$BCS_SOURCE"
+    printf "\nArchive volume %s NOT FOUND in %s\n" $(basename "$source") "$BCS_SOURCE"
     printf "Either place this file in the source directory and press enter\n"
     printf "Or enter a new source path and press enter\n"
     read newpath
