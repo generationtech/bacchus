@@ -76,7 +76,7 @@ fi
 if [ "$BCS_ESTIMATE" == "on" ]; then
   printf 'Estimating total size of:  %s\n' "$BCS_SOURCE"
   total_source_size=$(du -sk $BCS_SOURCE | awk '{print $1}')
-  printf 'Total size:                %sk\n' "$total_source_size"
+  printf "Total size:                %'.0fk\n" "$total_source_size"
   total_volumes=$(( $total_source_size / $BCS_VOLUMESIZE ))
   if [[ $(( $BCS_VOLUMESIZE * $total_volumes )) -lt $total_source_size ]]; then
     total_volumes=$(( $total_volumes + 1 ))

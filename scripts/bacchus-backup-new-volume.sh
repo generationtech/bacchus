@@ -129,20 +129,41 @@ Elapsed_Readable()
 # Compute & output statistics
 archive_volume_size=$(stat -c %s "$destination")
 archive_size=$(( archive_size + (archive_volume_size / 1024) ))
+archive_size_text=`printf "%'.0f" $(( BCS_VOLUMESIZE * (TAR_VOLUME - 1) ))`
+
+archive_max_name=$(( ${#BCS_BASENAME} + `expr length "$archive_volumes"` + 5 ))
+archive_max_num=$(( `expr length "$archive_volumes"` + 1 ))
+
+source_size_text=`expr length "$source_size"`
+max_source_size_text=$(( source_size_text + (source_size_text / 3) + 9 ))
+
+dest_size=$(du -c "$bcs_dest"/"$BCS_BASENAME"* | tail -1 | awk '{ print $1 }')
+dest_size_text=`printf "%'.0f" $dest_size`
+
 completion_timestamp="$(date +%s)"
 diff_time=$(( completion_timestamp - start_timestamp ))
 avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 1) ) ))
-remain_time=$(( (avg_archive_time * (archive_volumes - TAR_VOLUME - 1) ) ))
+remain_time=$(( (avg_archive_time * (archive_volumes - TAR_VOLUME + 1) ) ))
 
-printf '%s\tof %s (%s%%)\tremain(%s)\telapsed(%s)\tlast(%s)\tavg(%s)\tcompr(%s%%)\n' \
-  "$TAR_ARCHIVE" \
-  "$archive_volumes" \
-  $(( ((TAR_VOLUME - 1) * 100) / archive_volumes )) \
-  $( Elapsed_Readable $remain_time ) \
-  $( Elapsed_Readable $diff_time ) \
-  $( Elapsed_Readable $(( $completion_timestamp - $last_timestamp )) ) \
-  $( Elapsed_Readable $avg_archive_time ) \
-  $(( 100 - ( ($(du -c "$bcs_dest"/"$BCS_BASENAME"* | tail -1 | awk '{ print $1 }') * 100) / (BCS_VOLUMESIZE * (TAR_VOLUME - 1) ) ) ))
+printf "%-${archive_max_name}s \
+%${archive_max_num}s \
+%6s  \
+%-18s \
+%-18s \
+%-10s \
+%-10s \
+%-11s \
+%-${max_source_size_text}s %-${max_source_size_text}s\n" \
+    "$TAR_ARCHIVE" \
+    "/$archive_volumes" \
+    "($(( ((TAR_VOLUME - 1) * 100) / archive_volumes ))%)" \
+    "remain($( Elapsed_Readable $remain_time ))" \
+    "elapsed($( Elapsed_Readable $diff_time ))" \
+    "last($( Elapsed_Readable $(( $completion_timestamp - $last_timestamp )) ))" \
+    "avg($( Elapsed_Readable $avg_archive_time ))" \
+    "compr($(( 100 - ( ( dest_size * 100) / (BCS_VOLUMESIZE * (TAR_VOLUME - 1) ) ) ))%)" \
+    "source(${archive_size_text}k)" \
+    "dest(${dest_size_text}k)"
 
 # Update runtime data to persistence file
 last_timestamp="$(date +%s)"
