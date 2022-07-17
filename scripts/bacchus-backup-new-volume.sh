@@ -142,7 +142,7 @@ printf '%s\tof %s (%s%%)\tremain(%s)\telapsed(%s)\tlast(%s)\tavg(%s)\tcompr(%s%%
   $( Elapsed_Readable $diff_time ) \
   $( Elapsed_Readable $(( $completion_timestamp - $last_timestamp )) ) \
   $( Elapsed_Readable $avg_archive_time ) \
-  $(( 100 - ( ($(du -c /mnt/disk1/backup/test/test.tar* | tail -1 | awk '{ print $1 }') * 100) / (BCS_VOLUMESIZE * (TAR_VOLUME - 1) ) ) ))
+  $(( 100 - ( ($(du -c "$bcs_dest"/"$BCS_BASENAME"* | tail -1 | awk '{ print $1 }') * 100) / (BCS_VOLUMESIZE * (TAR_VOLUME - 1) ) ) ))
 
 # Update runtime data to persistence file
 last_timestamp="$(date +%s)"
