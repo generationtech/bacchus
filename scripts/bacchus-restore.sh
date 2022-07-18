@@ -32,62 +32,9 @@
 
 scriptdir=$(dirname "$_")
 
-Cleanup()
-{
-  printf "\nOperation shutting down - cleanup process started\n\n"
-  if [[ "$BCS_RAMDISK" == "on" ]]; then
-    sync
-    ramdisk="$BCS_TMPFILE".ramdisk
-    if [ "$(findmnt "$ramdisk" -n -o TARGET)" == "$ramdisk" ]; then
-      until umount "$BCS_TMPFILE".ramdisk
-      do
-        sleep 2
-        echo "Unmount ramdisk failed, retrying"
-      done
-    fi
-  fi
-  if [[ "$BCS_TMPFILE" == *"tmp"* ]]; then
-    rm -rf "$BCS_TMPFILE"*
-  fi
-}
-
-Duration_Readable()
-{
-  string_date=""
-
-  days=$(( $1/3600/24 ))
-  if [ $days -gt 0 ]; then
-    string_date+="${days}d"
-  fi
-  remainder=$(( $1 - (days*3600*24) ))
-
-  hours=$(( remainder/3600 ))
-  if [ $hours -gt 0 ]; then
-    if [ -n "$string_date" ]; then
-      string_date+=":"
-    fi
-    string_date+="${hours}h"
-  fi
-  remainder=$(( remainder - (hours*3600) ))
-
-  minutes=$(( remainder/60 ))
-  if [ $minutes -gt 0 ]; then
-    if [ -n "$string_date" ]; then
-      string_date+=":"
-    fi
-    string_date+="${minutes}m"
-  fi
-  remainder=$(( remainder - (minutes*60) ))
-
-  if [ $remainder -gt 0 ]; then
-    if [ -n "$string_date" ]; then
-      string_date+=":"
-    fi
-    string_date+="${remainder}s"
-  fi
-
-  printf "%s" "$string_date"
-}
+source "scripts/include/common/cleanup.sh" || { echo "scripts/include/common/cleanup.sh not found"; exit 1; }
+source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
+source "scripts/include/common/load_persistence.sh" || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
@@ -207,13 +154,7 @@ fi
 tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh" --volno-file "$BCS_TMPFILE".volno -f "$source" --directory "$BCS_DEST"
 
 # Pull current runtime data from persistence file
-runtime_data=$(<"$BCS_DATAFILE")
-bcs_source=$(echo "$runtime_data"          | jq -r '.bcs_source')
-start_timestamp=$(echo "$runtime_data"     | jq -r '.start_timestamp')
-last_timestamp=$(echo "$runtime_data"      | jq -r '.last_timestamp')
-source_size_running=$(echo "$runtime_data" | jq -r '.source_size_running')
-dest_size_running=$(echo "$runtime_data"   | jq -r '.dest_size_running')
-archive_volumes=$(echo "$runtime_data"     | jq -r '.archive_volumes')
+Load_Persistence
 
 if [ "$BCS_STATISTICS" == "on" ] && [ "$BCS_ENDSTATISTICS" == "on" ]; then
   completion_timestamp="$(date +%s)"

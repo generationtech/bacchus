@@ -30,24 +30,7 @@
 
 scriptdir=$(dirname "$_")
 
-Cleanup()
-{
-  printf "\nOperation shutting down - cleanup process started\n\n"
-  if [[ "$BCS_RAMDISK" == "on" ]]; then
-    sync
-    ramdisk="$BCS_TMPFILE".ramdisk
-    if [ "$(findmnt "$ramdisk" -n -o TARGET)" == "$ramdisk" ]; then
-      until umount "$BCS_TMPFILE".ramdisk
-      do
-        sleep 2
-        echo "Unmount ramdisk failed, retrying"
-      done
-    fi
-  fi
-  if [[ "$BCS_TMPFILE" == *"tmp"* ]]; then
-    rm -rf "$BCS_TMPFILE"*
-  fi
-}
+source "scripts/include/common/cleanup.sh" || { echo "scripts/include/common/cleanup.sh not found"; exit 1; }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
@@ -107,8 +90,8 @@ tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchu
 
 # Setup tar variables to call new-volume script for handling last (or possibly only) archive volume
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
-  runtime_data=$(<"$BCS_DATAFILE")
-  BCS_TARDIR=$(echo "$runtime_data" | jq -r '.bcs_dest')
+  Load_Persistence
+  BCS_TARDIR="$bcs_dest"
 fi
 vol=$(cat "$BCS_TMPFILE".volno)
 case "$vol" in
