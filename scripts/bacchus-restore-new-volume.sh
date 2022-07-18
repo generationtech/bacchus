@@ -19,6 +19,7 @@
 
 source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
 source "scripts/include/common/load_persistence.sh" || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
+source "scripts/include/restore/incremental_stats.sh" || { echo "scripts/include/restore/incremental_stats.sh not found"; exit 1; }
 
 # Pull current runtime data from persistence file
 Load_Persistence
@@ -61,37 +62,7 @@ case "$TAR_SUBCOMMAND" in
 esac
 
 if [ "$BCS_STATISTICS" == "on" ] && [ "$BCS_RUNSTATISTICS" == "on" ]; then
-  # Compute & output incremntal statistics
-  archive_max_name=$(( ${#BCS_BASENAME} + 10 ))
-  max_source_size_text=$(( 20 ))
-
-  completion_timestamp="$(date +%s)"
-  diff_time=$(( completion_timestamp - start_timestamp ))
-  last_time=$(( completion_timestamp - last_timestamp ))
-  avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 1) ) ))
-
-  comp_ratio=$(( 100 - ( (source_size_running * 100) / dest_size_running) ))
-  source_size_running_text=$(printf "%'.0f" "$source_size_running")
-  dest_size_running_text=$(printf "%'.0f" "$dest_size_running")
-
-# Don't hate me for being ugly
-  printf "\
-%-${archive_max_name}s \
-%-18s \
-%-13s \
-%-13s \
-%-11s \
-%-${max_source_size_text}s  \
-%-${max_source_size_text}s \
-%(%m-%d-%Y %H:%M:%S)T\n" \
-    "$filename" \
-    "elapsed..$( Duration_Readable $diff_time )" \
-    "last..$( Duration_Readable $last_time )" \
-    "avg..$( Duration_Readable $avg_archive_time )" \
-    "compr..${comp_ratio}%" \
-    "source..${source_size_running_text}k" \
-    "dest..${dest_size_running_text}k" \
-    "$completion_timestamp"
+  Incremental_Stats
 else
   printf '%s\n' "$filename"
 fi

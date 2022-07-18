@@ -35,6 +35,7 @@ scriptdir=$(dirname "$_")
 source "scripts/include/common/cleanup.sh" || { echo "scripts/include/common/cleanup.sh not found"; exit 1; }
 source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
 source "scripts/include/common/load_persistence.sh" || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
+source "scripts/include/restore/completion_stats.sh" || { echo "scripts/include/restore/completion_stats.sh not found"; exit 1; }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
@@ -157,22 +158,7 @@ tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-ne
 Load_Persistence
 
 if [ "$BCS_STATISTICS" == "on" ] && [ "$BCS_ENDSTATISTICS" == "on" ]; then
-  completion_timestamp="$(date +%s)"
-  diff_time=$(( completion_timestamp - start_timestamp ))
-  avg_archive_time=$(( ( diff_time / archive_volumes ) ))
-
-  source_size_running_text=$(printf "%'.0f" "$source_size_running")
-  dest_size_running_text=$(printf "%'.0f" "$dest_size_running")
-
-  comp_ratio=$(( 100 - ( (source_size_running * 100) / dest_size_running) ))
-
-  printf '\nRESTORE OPERATION COMPLETE\n'
-  printf 'Total runtime:                 %s\n' "$( Duration_Readable $diff_time )"
-  printf 'Average time per archive file: %s\n' "$( Duration_Readable $avg_archive_time )"
-  printf 'Number of archive files:       %s\n' "$archive_volumes"
-  printf 'Total space restored:          %sk\n' "$source_size_running_text"
-  printf 'Total space on source:         %sk\n' "$dest_size_running_text"
-  printf 'Overall compression ratio:     %s%%\n' "$comp_ratio"
+  Completion_Stats
 fi
 
 vol=$(cat "$BCS_TMPFILE".volno)
