@@ -60,9 +60,9 @@ runtime_data=$(<"$BCS_DATAFILE")
 bcs_source=$(echo "$runtime_data"          | jq -r '.bcs_source')
 start_timestamp=$(echo "$runtime_data"     | jq -r '.start_timestamp')
 last_timestamp=$(echo "$runtime_data"      | jq -r '.last_timestamp')
-# source_size_total=$(echo "$runtime_data"   | jq -r '.source_size_total')
-# source_size_running=$(echo "$runtime_data" | jq -r '.source_size_running')
-# archive_volumes=$(echo "$runtime_data"     | jq -r '.archive_volumes')
+source_size_running=$(echo "$runtime_data" | jq -r '.source_size_running')
+dest_size_running=$(echo "$runtime_data"   | jq -r '.dest_size_running')
+archive_volumes=$(echo "$runtime_data"     | jq -r '.archive_volumes')
 
 tararchivedir=$(dirname "$TAR_ARCHIVE")
 name=$(expr "$(basename "$TAR_ARCHIVE")" : '\(.*\)-.*')
@@ -105,6 +105,9 @@ esac
 
 last_timestamp="$(date +%s)"
 
+source_actual=$(stat -c %s "$source")
+source_actual=$(( source_actual / 1024 ))
+
 if [ -n "$BCS_PASSWORD" ]; then
   if [ "$BCS_COMPRESS" == "on" ]; then
     destination="$BCS_DECRYPTDIR"/"$filename".gz
@@ -125,6 +128,9 @@ if [ "$BCS_COMPRESS" == "on" ]; then
   source="$destination"
 fi
 
+dest_actual=$(stat -c %s "$source")
+dest_actual=$(( dest_actual / 1024 ))
+
 case "$TAR_FD" in
   none) exit 0
         ;;
@@ -135,11 +141,10 @@ esac
 # Update runtime data to persistence file
 runtime_data=$(jo bcs_source="$bcs_source" \
                   start_timestamp="$start_timestamp" \
-                  last_timestamp="$last_timestamp" #\
-                  # source_size_total=$source_size_total \
-                  # source_size_running=$source_size_running \
-                  # archive_volumes=$archive_volumes
-                  )
+                  last_timestamp="$last_timestamp" \
+                  source_size_running="$(( source_size_running + source_actual ))" \
+                  dest_size_running="$(( dest_size_running + dest_actual ))" \
+                  archive_volumes=$(( archive_volumes + 1 )) )
 echo "$runtime_data" > "$BCS_DATAFILE"
 
 exit 0

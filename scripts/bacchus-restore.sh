@@ -51,6 +51,44 @@ Cleanup()
   fi
 }
 
+Duration_Readable()
+{
+  string_date=""
+
+  days=$(( $1/3600/24 ))
+  if [ $days -gt 0 ]; then
+    string_date+="${days}d"
+  fi
+  remainder=$(( $1 - (days*3600*24) ))
+
+  hours=$(( remainder/3600 ))
+  if [ $hours -gt 0 ]; then
+    if [ -n "$string_date" ]; then
+      string_date+=":"
+    fi
+    string_date+="${hours}h"
+  fi
+  remainder=$(( remainder - (hours*3600) ))
+
+  minutes=$(( remainder/60 ))
+  if [ $minutes -gt 0 ]; then
+    if [ -n "$string_date" ]; then
+      string_date+=":"
+    fi
+    string_date+="${minutes}m"
+  fi
+  remainder=$(( remainder - (minutes*60) ))
+
+  if [ $remainder -gt 0 ]; then
+    if [ -n "$string_date" ]; then
+      string_date+=":"
+    fi
+    string_date+="${remainder}s"
+  fi
+
+  printf "%s" "$string_date"
+}
+
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
 
@@ -104,18 +142,6 @@ else
   fi
 fi
 
-# Populate external data structure with starting values
-export BCS_DATAFILE="$BCS_TMPFILE".runtime
-timestamp="$(date +%s)"
-runtime_data=$(jo bcs_source="$BCS_SOURCE" \
-                  start_timestamp="$timestamp" \
-                  last_timestamp="$timestamp" #\
-                  # source_size_total=$total_source_size \
-                  # source_size_running=0 \
-                  # archive_volumes=$total_volumes
-                  )
-echo "$runtime_data" > "$BCS_DATAFILE"
-
 # process first (possibly only) backup volume
 echo "$BCS_BASENAME".tar
 
@@ -131,6 +157,10 @@ if [ -n "$BCS_PASSWORD" ]; then
   else
     destination="$BCS_DECRYPTDIR"/"$BCS_BASENAME".tar
   fi
+  if [ -z "$source_actual" ]; then
+    source_actual=$(stat -c %s "$source".gpg)
+    source_actual=$(( source_actual / 1024 ))
+  fi
   echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$destination" "$source".gpg
   source="$destination"
 fi
@@ -139,11 +169,34 @@ if [ "$BCS_COMPRESS" == "on" ]; then
   destination="$BCS_COMPRESDIR"/"$BCS_BASENAME".tar
   pigz -9cd "$source" > "$destination"
   #gzip -9cd "$source" > "$destination"
+  if [ -z "$source_actual" ]; then
+    source_actual=$(stat -c %s "$source")
+    source_actual=$(( source_actual / 1024 ))
+  fi
   if [ -n "$BCS_PASSWORD" ]; then
     rm -f "$source"
   fi
   source="$destination"
 fi
+
+if [ -z "$source_actual" ]; then
+  source_actual=$(stat -c %s "$source")
+  source_actual=$(( source_actual / 1024 ))
+fi
+
+dest_actual=$(stat -c %s "$source")
+dest_actual=$(( dest_actual / 1024 ))
+
+# Populate external data structure with starting values
+export BCS_DATAFILE="$BCS_TMPFILE".runtime
+timestamp="$(date +%s)"
+runtime_data=$(jo bcs_source="$BCS_SOURCE" \
+                  start_timestamp="$timestamp" \
+                  last_timestamp="$timestamp" \
+                  source_size_running=$source_actual \
+                  dest_size_running=$dest_actual \
+                  archive_volumes=1)
+echo "$runtime_data" > "$BCS_DATAFILE"
 
 if [ "$BCS_VERBOSETAR" == "on" ]; then
   tarargs='-xpMv'
@@ -152,6 +205,34 @@ else
 fi
 
 tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh" --volno-file "$BCS_TMPFILE".volno -f "$source" --directory "$BCS_DEST"
+
+# Pull current runtime data from persistence file
+runtime_data=$(<"$BCS_DATAFILE")
+bcs_source=$(echo "$runtime_data"          | jq -r '.bcs_source')
+start_timestamp=$(echo "$runtime_data"     | jq -r '.start_timestamp')
+last_timestamp=$(echo "$runtime_data"      | jq -r '.last_timestamp')
+source_size_running=$(echo "$runtime_data" | jq -r '.source_size_running')
+dest_size_running=$(echo "$runtime_data"   | jq -r '.dest_size_running')
+archive_volumes=$(echo "$runtime_data"     | jq -r '.archive_volumes')
+
+if [ "$BCS_STATISTICS" == "on" ] && [ "$BCS_ENDSTATISTICS" == "on" ]; then
+  completion_timestamp="$(date +%s)"
+  diff_time=$(( completion_timestamp - start_timestamp ))
+  avg_archive_time=$(( ( diff_time / archive_volumes ) ))
+
+  source_size_running_text=$(printf "%'.0f" "$source_size_running")
+  dest_size_running_text=$(printf "%'.0f" "$dest_size_running")
+
+  comp_ratio=$(( 100 - ( (source_size_running * 100) / dest_size_running) ))
+
+  printf '\nRESTORE OPERATION COMPLETE\n'
+  printf 'Total runtime:                 %s\n' "$( Duration_Readable $diff_time )"
+  printf 'Average time per archive file: %s\n' "$( Duration_Readable $avg_archive_time )"
+  printf 'Number of archive files:       %s\n' "$archive_volumes"
+  printf 'Total space restored:          %sk\n' "$source_size_running_text"
+  printf 'Total space on source:         %sk\n' "$dest_size_running_text"
+  printf 'Overall compression ratio:     %s%%\n' "$comp_ratio"
+fi
 
 vol=$(cat "$BCS_TMPFILE".volno)
 case "$vol" in
