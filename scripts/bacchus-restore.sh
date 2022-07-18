@@ -146,6 +146,7 @@ fi
 echo "$BCS_BASENAME".tar
 
 source="$BCS_SOURCE"/"$BCS_BASENAME".tar
+timestamp="$(date +%s)"
 
 if [ "$BCS_COMPRESS" == "on" ]; then
   source="$source".gz
@@ -189,7 +190,6 @@ dest_actual=$(( dest_actual / 1024 ))
 
 # Populate external data structure with starting values
 export BCS_DATAFILE="$BCS_TMPFILE".runtime
-timestamp="$(date +%s)"
 runtime_data=$(jo bcs_source="$BCS_SOURCE" \
                   start_timestamp="$timestamp" \
                   last_timestamp="$timestamp" \

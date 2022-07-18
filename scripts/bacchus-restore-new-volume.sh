@@ -70,8 +70,6 @@ vol="${name:-$TAR_ARCHIVE}"-"$TAR_VOLUME"
 filename="${vol##*/}"
 oldname="${TAR_ARCHIVE##*/}"
 
-echo "$filename"
-
 while true; do
   source="$bcs_source"/"$filename"
   if [ "$BCS_COMPRESS" == "on" ]; then
@@ -102,6 +100,42 @@ case "$TAR_SUBCOMMAND" in
       ;;
   *)  exit 1
 esac
+
+if [ "$BCS_STATISTICS" == "on" ] && [ "$BCS_RUNSTATISTICS" == "on" ]; then
+  # Compute & output incremntal statistics
+  archive_max_name=$(( ${#BCS_BASENAME} + 10 ))
+  max_source_size_text=$(( 20 ))
+
+  completion_timestamp="$(date +%s)"
+  diff_time=$(( completion_timestamp - start_timestamp ))
+  last_time=$(( completion_timestamp - last_timestamp ))
+  avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 1) ) ))
+
+  comp_ratio=$(( 100 - ( (source_size_running * 100) / dest_size_running) ))
+  source_size_running_text=$(printf "%'.0f" "$source_size_running")
+  dest_size_running_text=$(printf "%'.0f" "$dest_size_running")
+
+# Don't hate me for being ugly
+  printf "\
+%-${archive_max_name}s \
+%-18s \
+%-13s \
+%-13s \
+%-11s \
+%-${max_source_size_text}s  \
+%-${max_source_size_text}s \
+%(%m-%d-%Y %H:%M:%S)T\n" \
+    "$filename" \
+    "elapsed..$( Duration_Readable $diff_time )" \
+    "last..$( Duration_Readable $last_time )" \
+    "avg..$( Duration_Readable $avg_archive_time )" \
+    "compr..${comp_ratio}%" \
+    "source..${source_size_running_text}k" \
+    "dest..${dest_size_running_text}k" \
+    "$completion_timestamp"
+else
+  printf '%s\n' "$filename"
+fi
 
 last_timestamp="$(date +%s)"
 
