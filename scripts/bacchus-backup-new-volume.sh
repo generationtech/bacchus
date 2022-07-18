@@ -128,8 +128,8 @@ if [ "$BCS_STATISTICS" == "on" ] && [ "$BCS_RUNSTATISTICS" == "on" ]; then
 %4s  \
 %-18s \
 %-18s \
-%-10s \
-%-10s \
+%-13s \
+%-13s \
 %-11s \
 %-${max_source_size_text}s  \
 %-${max_source_size_text}s \

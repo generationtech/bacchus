@@ -17,17 +17,63 @@
 #       Bacchus does not unencrypt backup, and operation will fail if
 #       archive was backed up as encrypted
 
+Duration_Readable()
+{
+  string_date=""
+
+  days=$(( $1/3600/24 ))
+  if [ $days -gt 0 ]; then
+    string_date+="${days}d"
+  fi
+  remainder=$(( $1 - (days*3600*24) ))
+
+  hours=$(( remainder/3600 ))
+  if [ $hours -gt 0 ]; then
+    if [ -n "$string_date" ]; then
+      string_date+=":"
+    fi
+    string_date+="${hours}h"
+  fi
+  remainder=$(( remainder - (hours*3600) ))
+
+  minutes=$(( remainder/60 ))
+  if [ $minutes -gt 0 ]; then
+    if [ -n "$string_date" ]; then
+      string_date+=":"
+    fi
+    string_date+="${minutes}m"
+  fi
+  remainder=$(( remainder - (minutes*60) ))
+
+  if [ $remainder -gt 0 ]; then
+    if [ -n "$string_date" ]; then
+      string_date+=":"
+    fi
+    string_date+="${remainder}s"
+  fi
+
+  printf "%s" "$string_date"
+}
+
+# Pull current runtime data from persistence file
+runtime_data=$(<"$BCS_DATAFILE")
+bcs_source=$(echo "$runtime_data"          | jq -r '.bcs_source')
+start_timestamp=$(echo "$runtime_data"     | jq -r '.start_timestamp')
+last_timestamp=$(echo "$runtime_data"      | jq -r '.last_timestamp')
+# source_size_total=$(echo "$runtime_data"   | jq -r '.source_size_total')
+# source_size_running=$(echo "$runtime_data" | jq -r '.source_size_running')
+# archive_volumes=$(echo "$runtime_data"     | jq -r '.archive_volumes')
+
 tararchivedir=$(dirname "$TAR_ARCHIVE")
-name=$(expr $(basename "$TAR_ARCHIVE") : '\(.*\)-.*')
+name=$(expr "$(basename "$TAR_ARCHIVE")" : '\(.*\)-.*')
 vol="${name:-$TAR_ARCHIVE}"-"$TAR_VOLUME"
 filename="${vol##*/}"
 oldname="${TAR_ARCHIVE##*/}"
 
 echo "$filename"
 
-BCS_SOURCE=$(<"$BCS_PATHFILE")
 while true; do
-  source="$BCS_SOURCE"/"$filename"
+  source="$bcs_source"/"$filename"
   if [ "$BCS_COMPRESS" == "on" ]; then
     source="$source".gz
     rm -f "$BCS_COMPRESDIR"/"$oldname"
@@ -38,14 +84,13 @@ while true; do
   fi
 
   if [ ! -f "$source" ]; then
-    printf "\nArchive volume %s NOT FOUND in %s\n" $(basename "$source") "$BCS_SOURCE"
+    printf "\nArchive volume %s NOT FOUND in %s\n" "$(basename "$source")" "$bcs_source"
     printf "Either place this file in the source directory and press enter\n"
     printf "Or enter a new source path and press enter\n"
     read newpath
     printf "\n"
     if [ -n "$newpath" ]; then
-      BCS_SOURCE="$newpath"
-      echo "$BCS_SOURCE" > "$BCS_PATHFILE"
+      bcs_source="$newpath"
     fi
   else
     break
@@ -57,6 +102,8 @@ case "$TAR_SUBCOMMAND" in
       ;;
   *)  exit 1
 esac
+
+last_timestamp="$(date +%s)"
 
 if [ -n "$BCS_PASSWORD" ]; then
   if [ "$BCS_COMPRESS" == "on" ]; then
@@ -82,7 +129,17 @@ case "$TAR_FD" in
   none) exit 0
         ;;
   # *)    echo "${name:-$TAR_ARCHIVE}"-"$TAR_VOLUME" >&"$TAR_FD"
-  *)    echo "$tararchivedir/$BCS_BASENAME".tar-"$TAR_VOLUME" >&"$TAR_FD"
+  *)    echo "$tararchivedir/$BCS_BASENAME.tar-$TAR_VOLUME" >&"$TAR_FD"
 esac
+
+# Update runtime data to persistence file
+runtime_data=$(jo bcs_source="$bcs_source" \
+                  start_timestamp="$start_timestamp" \
+                  last_timestamp="$last_timestamp" #\
+                  # source_size_total=$source_size_total \
+                  # source_size_running=$source_size_running \
+                  # archive_volumes=$archive_volumes
+                  )
+echo "$runtime_data" > "$BCS_DATAFILE"
 
 exit 0

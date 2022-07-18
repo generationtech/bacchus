@@ -34,20 +34,24 @@ scriptdir=$(dirname "$_")
 
 Cleanup()
 {
+  printf "\nOperation shutting down - cleanup process started\n\n"
   if [[ "$BCS_RAMDISK" == "on" ]]; then
     sync
-    umount "$BCS_TMPFILE".ramdisk
-    rmdir "$BCS_TMPFILE".ramdisk
+    ramdisk="$BCS_TMPFILE".ramdisk
+    if [ "$(findmnt "$ramdisk" -n -o TARGET)" == "$ramdisk" ]; then
+      until umount "$BCS_TMPFILE".ramdisk
+      do
+        sleep 2
+        echo "Unmount ramdisk failed, retrying"
+      done
+    fi
   fi
   if [[ "$BCS_TMPFILE" == *"tmp"* ]]; then
-    rm -rf "$BCS_TMPFILE"
-    rm -rf "$BCS_PATHFILE"
+    rm -rf "$BCS_TMPFILE"*
   fi
 }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
-export BCS_PATHFILE="$BCS_TMPFILE".dest
-echo "$BCS_SOURCE" > "$BCS_PATHFILE"
 trap Cleanup EXIT
 
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
@@ -100,6 +104,18 @@ else
   fi
 fi
 
+# Populate external data structure with starting values
+export BCS_DATAFILE="$BCS_TMPFILE".runtime
+timestamp="$(date +%s)"
+runtime_data=$(jo bcs_source="$BCS_SOURCE" \
+                  start_timestamp="$timestamp" \
+                  last_timestamp="$timestamp" #\
+                  # source_size_total=$total_source_size \
+                  # source_size_running=0 \
+                  # archive_volumes=$total_volumes
+                  )
+echo "$runtime_data" > "$BCS_DATAFILE"
+
 # process first (possibly only) backup volume
 echo "$BCS_BASENAME".tar
 
@@ -135,9 +151,9 @@ else
   tarargs='-xpM'
 fi
 
-tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh" --volno-file "$BCS_TMPFILE" -f "$source" --directory "$BCS_DEST"
+tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh" --volno-file "$BCS_TMPFILE".volno -f "$source" --directory "$BCS_DEST"
 
-vol=$(cat "$BCS_TMPFILE")
+vol=$(cat "$BCS_TMPFILE".volno)
 case "$vol" in
 1)     rm "$source"
        ;;
