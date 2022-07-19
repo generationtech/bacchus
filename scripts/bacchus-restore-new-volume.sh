@@ -20,6 +20,7 @@
 source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
 source "scripts/include/common/load_persistence.sh" || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
 source "scripts/include/restore/incremental_stats.sh" || { echo "scripts/include/restore/incremental_stats.sh not found"; exit 1; }
+source "scripts/include/restore/process_volume.sh" || { echo "scripts/include/restore/process_volume.sh not found"; exit 1; }
 
 # Pull current runtime data from persistence file
 Load_Persistence
@@ -68,32 +69,8 @@ else
 fi
 
 last_timestamp="$(date +%s)"
-
-source_actual=$(stat -c %s "$source")
-source_actual=$(( source_actual / 1024 ))
-
-if [ -n "$BCS_PASSWORD" ]; then
-  if [ "$BCS_COMPRESS" == "on" ]; then
-    destination="$BCS_DECRYPTDIR"/"$filename".gz
-  else
-    destination="$BCS_DECRYPTDIR"/"$filename"
-  fi
-  echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$destination" "$source"
-  source="$destination"
-fi
-
-if [ "$BCS_COMPRESS" == "on" ]; then
-  destination="$BCS_COMPRESDIR"/"$filename"
-  pigz -9cd "$source" > "$destination"
-  #gzip -9cd "$source" > "$destination"
-  if [ -n "$BCS_PASSWORD" ]; then
-    rm -f "$source"
-  fi
-  source="$destination"
-fi
-
-dest_actual=$(stat -c %s "$source")
-dest_actual=$(( dest_actual / 1024 ))
+source="$bcs_source"/"$filename"
+Process_Volume "$filename" "$BCS_DECRYPTDIR" "$BCS_COMPRESDIR"
 
 case "$TAR_FD" in
   none) exit 0
@@ -106,8 +83,8 @@ esac
 runtime_data=$(jo bcs_source="$bcs_source" \
                   start_timestamp="$start_timestamp" \
                   last_timestamp="$last_timestamp" \
-                  source_size_running="$(( source_size_running + source_actual ))" \
-                  dest_size_running="$(( dest_size_running + dest_actual ))" \
+                  source_size_running="$(( source_size_running + source_actual_size ))" \
+                  dest_size_running="$(( dest_size_running + dest_actual_size ))" \
                   archive_volumes=$(( archive_volumes + 1 )) )
 echo "$runtime_data" > "$BCS_DATAFILE"
 

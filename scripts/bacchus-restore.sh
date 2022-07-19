@@ -36,6 +36,7 @@ source "scripts/include/common/cleanup.sh" || { echo "scripts/include/common/cle
 source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
 source "scripts/include/common/load_persistence.sh" || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
 source "scripts/include/restore/completion_stats.sh" || { echo "scripts/include/restore/completion_stats.sh not found"; exit 1; }
+source "scripts/include/restore/process_volume.sh" || { echo "scripts/include/restore/process_volume.sh not found"; exit 1; }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
@@ -43,34 +44,15 @@ trap Cleanup EXIT
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
   BCS_TARDIR="$BCS_DEST"
 else
+  # Determine size for ramdisk based on the starting archive processed size
   if [ "$BCS_RAMDISK" == "on" ]; then
-    source="$BCS_SOURCE"/"$BCS_BASENAME".tar
     ramdisk_size_tmpdir="$BCS_TMPFILE".ramdisk_size
     mkdir "$ramdisk_size_tmpdir"
 
-    if [ "$BCS_COMPRESS" == "on" ]; then
-      source="$source".gz
-    fi
+    source="$BCS_SOURCE"/"$BCS_BASENAME".tar
+    Process_Volume "$BCS_BASENAME".tar "$ramdisk_size_tmpdir" "$ramdisk_size_tmpdir"
 
-    if [ -n "$BCS_PASSWORD" ]; then
-      if [ "$BCS_COMPRESS" == "on" ]; then
-        destination="$ramdisk_size_tmpdir"/"$BCS_BASENAME".tar.gz
-      else
-        destination="$ramdisk_size_tmpdir"/"$BCS_BASENAME".tar
-      fi
-      echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$destination" "$source".gpg
-      source="$destination"
-    fi
-
-    if [ "$BCS_COMPRESS" == "on" ]; then
-      destination="$ramdisk_size_tmpdir"/"$BCS_BASENAME".tar
-      pigz -9cd "$source" > "$destination"
-      #gzip -9cd "$source" > "$destination"
-      source="$destination"
-    fi
-
-    BCS_VOLUMESIZE=$(stat -c %s "$source")
-    BCS_VOLUMESIZE=$(( BCS_VOLUMESIZE / 1024 ))
+    BCS_VOLUMESIZE=$dest_actual_size
     rm -rf "$ramdisk_size_tmpdir"
 
     ramdisk_size=0
@@ -90,59 +72,20 @@ else
   fi
 fi
 
-# process first (possibly only) backup volume
+# Process first (possibly only) backup volume
 echo "$BCS_BASENAME".tar
-
-source="$BCS_SOURCE"/"$BCS_BASENAME".tar
 timestamp="$(date +%s)"
 
-if [ "$BCS_COMPRESS" == "on" ]; then
-  source="$source".gz
-fi
-
-if [ -n "$BCS_PASSWORD" ]; then
-  if [ "$BCS_COMPRESS" == "on" ]; then
-    destination="$BCS_DECRYPTDIR"/"$BCS_BASENAME".tar.gz
-  else
-    destination="$BCS_DECRYPTDIR"/"$BCS_BASENAME".tar
-  fi
-  if [ -z "$source_actual" ]; then
-    source_actual=$(stat -c %s "$source".gpg)
-    source_actual=$(( source_actual / 1024 ))
-  fi
-  echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$destination" "$source".gpg
-  source="$destination"
-fi
-
-if [ "$BCS_COMPRESS" == "on" ]; then
-  destination="$BCS_COMPRESDIR"/"$BCS_BASENAME".tar
-  pigz -9cd "$source" > "$destination"
-  #gzip -9cd "$source" > "$destination"
-  if [ -z "$source_actual" ]; then
-    source_actual=$(stat -c %s "$source")
-    source_actual=$(( source_actual / 1024 ))
-  fi
-  if [ -n "$BCS_PASSWORD" ]; then
-    rm -f "$source"
-  fi
-  source="$destination"
-fi
-
-if [ -z "$source_actual" ]; then
-  source_actual=$(stat -c %s "$source")
-  source_actual=$(( source_actual / 1024 ))
-fi
-
-dest_actual=$(stat -c %s "$source")
-dest_actual=$(( dest_actual / 1024 ))
+source="$BCS_SOURCE"/"$BCS_BASENAME".tar
+Process_Volume "$BCS_BASENAME".tar "$BCS_DECRYPTDIR" "$BCS_COMPRESDIR"
 
 # Populate external data structure with starting values
 export BCS_DATAFILE="$BCS_TMPFILE".runtime
 runtime_data=$(jo bcs_source="$BCS_SOURCE" \
                   start_timestamp="$timestamp" \
                   last_timestamp="$timestamp" \
-                  source_size_running=$source_actual \
-                  dest_size_running=$dest_actual \
+                  source_size_running=$source_actual_size \
+                  dest_size_running=$dest_actual_size \
                   archive_volumes=1)
 echo "$runtime_data" > "$BCS_DATAFILE"
 
