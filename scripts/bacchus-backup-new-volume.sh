@@ -15,9 +15,9 @@
 #       bacchus does not encrypt backup
 
 source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
-source "scripts/include/common/load_persistence.sh"  || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
+source "scripts/include/common/load_persistence.sh"  || { echo "scripts/include/common/load_persistence.sh not found";  exit 1; }
 source "scripts/include/backup/incremental_stats.sh" || { echo "scripts/include/backup/incremental_stats.sh not found"; exit 1; }
-source "scripts/include/backup/completion_stats.sh"  || { echo "scripts/include/backup/completion_stats.sh not found"; exit 1; }
+source "scripts/include/backup/completion_stats.sh"  || { echo "scripts/include/backup/completion_stats.sh not found";  exit 1; }
 
 # Pull current runtime data from persistence file
 Load_Persistence

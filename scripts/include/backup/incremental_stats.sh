@@ -38,7 +38,7 @@ function Incremental_Stats()
   elapsed_time=$(( incremental_timestamp - start_timestamp - start_timestamp_running ))
 
   if [ "$source_size_running" -ne 0 ]; then
-    avg_archive_time=$(( ( elapsed_time / (TAR_VOLUME - 2) ) ))
+    avg_archive_time=$(( (elapsed_time / (TAR_VOLUME - 2) ) ))
     remain_time=$(( (avg_archive_time * (archive_volumes - TAR_VOLUME + 2) ) ))
     incremental_time=$(( incremental_timestamp - last_timestamp - last_timestamp_running ))
 
@@ -48,7 +48,7 @@ function Incremental_Stats()
       dest_size=$dest_size_running
     fi
 
-    comp_ratio=$(( 100 - ( ( dest_size * 100) / source_size_running ) ))
+    comp_ratio=$(( 100 - ( (dest_size * 100) / source_size_running) ))
   else
     avg_archive_time=0
     remain_time=0
@@ -75,10 +75,10 @@ function Incremental_Stats()
     "$TAR_ARCHIVE" \
     "/$archive_volumes" \
     "$(( ( (TAR_VOLUME - 1) * 100) / archive_volumes ))%" \
-    "remain..$( Duration_Readable $remain_time )" \
-    "elapsed..$( Duration_Readable $elapsed_time )" \
-    "last..$( Duration_Readable $incremental_time )" \
-    "avg..$( Duration_Readable $avg_archive_time )" \
+    "remain..$(Duration_Readable $remain_time)" \
+    "elapsed..$(Duration_Readable $elapsed_time)" \
+    "last..$(Duration_Readable $incremental_time)" \
+    "avg..$(Duration_Readable $avg_archive_time)" \
     "compr..${comp_ratio}%" \
     "source..${source_size_running_text}k" \
     "dest..${dest_size_text}k" \

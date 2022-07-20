@@ -17,10 +17,10 @@
 #       Bacchus does not unencrypt backup, and operation will fail if
 #       archive was backed up as encrypted
 
-source "scripts/include/common/duration_readable.sh"  || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
-source "scripts/include/common/load_persistence.sh"   || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
+source "scripts/include/common/duration_readable.sh"  || { echo "scripts/include/common/duration_readable.sh not found";  exit 1; }
+source "scripts/include/common/load_persistence.sh"   || { echo "scripts/include/common/load_persistence.sh not found";   exit 1; }
 source "scripts/include/restore/incremental_stats.sh" || { echo "scripts/include/restore/incremental_stats.sh not found"; exit 1; }
-source "scripts/include/restore/process_volume.sh"    || { echo "scripts/include/restore/process_volume.sh not found"; exit 1; }
+source "scripts/include/restore/process_volume.sh"    || { echo "scripts/include/restore/process_volume.sh not found";    exit 1; }
 
 # Pull current runtime data from persistence file
 Load_Persistence

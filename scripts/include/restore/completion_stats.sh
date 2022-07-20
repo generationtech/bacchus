@@ -17,7 +17,7 @@ function Completion_Stats()
 
   completion_timestamp="$(date +%s)"
   diff_time=$(( completion_timestamp - start_timestamp ))
-  avg_archive_time=$(( ( diff_time / archive_volumes ) ))
+  avg_archive_time=$(( (diff_time / archive_volumes) ))
 
   source_size_running_text=$(printf "%'.0f" "$source_size_running")
   dest_size_running_text=$(printf "%'.0f" "$dest_size_running")
@@ -25,8 +25,8 @@ function Completion_Stats()
   comp_ratio=$(( 100 - ( (source_size_running * 100) / dest_size_running) ))
 
   printf '\nRESTORE OPERATION COMPLETE\n'
-  printf 'Total runtime:                 %s\n' "$( Duration_Readable $diff_time )"
-  printf 'Average time per archive file: %s\n' "$( Duration_Readable $avg_archive_time )"
+  printf 'Total runtime:                 %s\n' "$(Duration_Readable $diff_time)"
+  printf 'Average time per archive file: %s\n' "$(Duration_Readable $avg_archive_time)"
   printf 'Number of archive files:       %s\n' "$archive_volumes"
   printf 'Total space restored:          %sk\n' "$source_size_running_text"
   printf 'Total space on source:         %sk\n' "$dest_size_running_text"

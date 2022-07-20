@@ -42,13 +42,13 @@ else
   if [ "$BCS_RAMDISK" == "on" ]; then
     ramdisk_size=0
     if [ "$BCS_COMPRESS" == "on" ]; then
-      ramdisk_size="$((ramdisk_size + BCS_VOLUMESIZE))"
+      ramdisk_size="$(( ramdisk_size + BCS_VOLUMESIZE ))"
     fi
     if [ -n "$BCS_PASSWORD" ]; then
-      ramdisk_size="$((ramdisk_size + BCS_VOLUMESIZE))"
+      ramdisk_size="$(( ramdisk_size + BCS_VOLUMESIZE ))"
     fi
     ramdisk_dir="$BCS_TMPFILE".ramdisk
-    ramdisk_size="$(( ((ramdisk_size * 1024) + ((BCS_VOLUMESIZE * 1024) / 100)) ))"
+    ramdisk_size="$(( ( (ramdisk_size * 1024) + ( (BCS_VOLUMESIZE * 1024) / 100) ) ))"
     mkdir -p "$ramdisk_dir"
     mount -t tmpfs -o size="$ramdisk_size" tmpfs "$ramdisk_dir"
     BCS_COMPRESDIR="$ramdisk_dir"

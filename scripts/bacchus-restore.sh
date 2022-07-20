@@ -32,11 +32,11 @@
 
 scriptdir=$(dirname "$_")
 
-source "scripts/include/common/cleanup.sh"           || { echo "scripts/include/common/cleanup.sh not found"; exit 1; }
+source "scripts/include/common/cleanup.sh"           || { echo "scripts/include/common/cleanup.sh not found";           exit 1; }
 source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
-source "scripts/include/common/load_persistence.sh"  || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
+source "scripts/include/common/load_persistence.sh"  || { echo "scripts/include/common/load_persistence.sh not found";  exit 1; }
 source "scripts/include/restore/completion_stats.sh" || { echo "scripts/include/restore/completion_stats.sh not found"; exit 1; }
-source "scripts/include/restore/process_volume.sh"   || { echo "scripts/include/restore/process_volume.sh not found"; exit 1; }
+source "scripts/include/restore/process_volume.sh"   || { echo "scripts/include/restore/process_volume.sh not found";   exit 1; }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
@@ -57,13 +57,13 @@ else
 
     ramdisk_size=0
     if [ "$BCS_COMPRESS" == "on" ]; then
-      ramdisk_size="$((ramdisk_size + BCS_VOLUMESIZE))"
+      ramdisk_size="$(( ramdisk_size + BCS_VOLUMESIZE ))"
     fi
     if [ -n "$BCS_PASSWORD" ]; then
-      ramdisk_size="$((ramdisk_size + BCS_VOLUMESIZE))"
+      ramdisk_size="$(( ramdisk_size + BCS_VOLUMESIZE ))"
     fi
     ramdisk_dir="$BCS_TMPFILE".ramdisk
-    ramdisk_size="$(( ((ramdisk_size * 1024) + ((BCS_VOLUMESIZE * 1024) / 100)) ))"
+    ramdisk_size="$(( ( (ramdisk_size * 1024) + ( (BCS_VOLUMESIZE * 1024) / 100) ) ))"
     mkdir -p "$ramdisk_dir"
     mount -t tmpfs -o size="$ramdisk_size" tmpfs "$ramdisk_dir"
     BCS_COMPRESDIR="$ramdisk_dir"
