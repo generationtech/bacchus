@@ -77,6 +77,7 @@ runtime_data=$(jo bcs_dest="$BCS_DEST" \
                   last_timestamp="$timestamp" \
                   source_size_total=$total_source_size \
                   source_size_running=0 \
+                  dest_size_running=0 \
                   archive_volumes=$total_volumes)
 echo "$runtime_data" > "$BCS_DATAFILE"
 
@@ -86,7 +87,7 @@ if [ "$BCS_VERBOSETAR" == "on" ]; then
 else
   tarargs='-cpM'
 fi
-tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchus-backup-new-volume.sh" -L "$BCS_VOLUMESIZE" --volno-file "$BCS_TMPFILE".volno -f "$BCS_TARDIR"/"$BCS_BASENAME".tar $BCS_SOURCE
+tar "$tarargs" --format=posix --sort=name --new-volume-script "$scriptdir/bacchus-backup-new-volume.sh" -L "$BCS_VOLUMESIZE" --volno-file "$BCS_TMPFILE".volno -f "$BCS_TARDIR"/"$BCS_BASENAME".tar "$BCS_SOURCE"
 
 # Setup tar variables to call new-volume script for handling last (or possibly only) archive volume
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then

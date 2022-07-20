@@ -9,6 +9,7 @@ function Incremental_Stats()
   # archive_volumes
   # source_size_total
   # source_size_running
+  # dest_size_running
   # start_timestamp
   # last_time
   # bcs_dest
@@ -41,7 +42,13 @@ function Incremental_Stats()
     avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 2) ) ))
     remain_time=$(( (avg_archive_time * (archive_volumes - TAR_VOLUME + 2) ) ))
     last_time=$(( completion_timestamp - last_timestamp ))
-    dest_size=$(du -c "$bcs_dest"/"$BCS_BASENAME"* | tail -1 | awk '{ print $1 }')
+
+    if compgen -G "${bcs_dest}/${BCS_BASENAME}*" > /dev/null; then
+      dest_size=$(( dest_size_running + $(du -c "${bcs_dest}/${BCS_BASENAME}"* | tail -1 | awk '{ print $1 }') ))
+    else
+      dest_size=$dest_size_running
+    fi
+
     comp_ratio=$(( 100 - ( ( dest_size * 100) / source_size_running ) ))
   else
     avg_archive_time=0

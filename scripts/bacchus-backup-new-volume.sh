@@ -47,6 +47,7 @@ while true; do
     read -r newpath
     printf "\n"
     if [ -n "$newpath" ]; then
+      dest_size_running=$(( dest_size_running + $(du -c "$bcs_dest"/"$BCS_BASENAME"* | tail -1 | awk '{ print $1 }') ))
       bcs_dest="$newpath"
     fi
   else
@@ -108,5 +109,6 @@ runtime_data=$(jo bcs_dest="$bcs_dest" \
                   last_timestamp="$last_timestamp" \
                   source_size_total=$source_size_total \
                   source_size_running=$source_size_running \
+                  dest_size_running=$dest_size_running \
                   archive_volumes=$archive_volumes)
 echo "$runtime_data" > "$BCS_DATAFILE"
