@@ -11,7 +11,6 @@ function Incremental_Stats()
   # source_size_running
   # dest_size_running
   # start_timestamp
-  # last_time
   # bcs_dest
 
   local archive_max_name
@@ -19,11 +18,11 @@ function Incremental_Stats()
   local source_size_text
   local max_source_size_text
   local source_size_running_text
-  local completion_timestamp
-  local diff_time
+  local elapsed_timestamp
+  local elapsed_time
   local avg_archive_time
   local remain_time
-  local last_time
+  local incremental_time
   local dest_size
   local comp_ratio
   local dest_size_text
@@ -35,13 +34,13 @@ function Incremental_Stats()
   max_source_size_text=$(( source_size_text + (source_size_text / 3) + 9 ))
   source_size_running_text=$(printf "%'.0f" "$source_size_running")
 
-  completion_timestamp="$(date +%s)"
-  diff_time=$(( completion_timestamp - start_timestamp ))
+  incremental_timestamp=$(date +%s)
+  elapsed_time=$(( incremental_timestamp - start_timestamp - start_timestamp_running ))
 
   if [ "$source_size_running" -ne 0 ]; then
-    avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 2) ) ))
+    avg_archive_time=$(( ( elapsed_time / (TAR_VOLUME - 2) ) ))
     remain_time=$(( (avg_archive_time * (archive_volumes - TAR_VOLUME + 2) ) ))
-    last_time=$(( completion_timestamp - last_timestamp ))
+    incremental_time=$(( incremental_timestamp - last_timestamp - last_timestamp_running ))
 
     if compgen -G "${bcs_dest}/${BCS_BASENAME}*" > /dev/null; then
       dest_size=$(( dest_size_running + $(du -c "${bcs_dest}/${BCS_BASENAME}"* | tail -1 | awk '{ print $1 }') ))
@@ -53,7 +52,7 @@ function Incremental_Stats()
   else
     avg_archive_time=0
     remain_time=0
-    last_time=0
+    incremental_time=0
     dest_size=0
     comp_ratio=0
   fi
@@ -77,11 +76,11 @@ function Incremental_Stats()
     "/$archive_volumes" \
     "$(( ( (TAR_VOLUME - 1) * 100) / archive_volumes ))%" \
     "remain..$( Duration_Readable $remain_time )" \
-    "elapsed..$( Duration_Readable $diff_time )" \
-    "last..$( Duration_Readable $last_time )" \
+    "elapsed..$( Duration_Readable $elapsed_time )" \
+    "last..$( Duration_Readable $incremental_time )" \
     "avg..$( Duration_Readable $avg_archive_time )" \
     "compr..${comp_ratio}%" \
     "source..${source_size_running_text}k" \
     "dest..${dest_size_text}k" \
-    "$completion_timestamp"
+    "$incremental_timestamp"
 }

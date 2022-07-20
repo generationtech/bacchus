@@ -11,16 +11,16 @@ function Completion_Stats()
   # bcs_dest
 
   local completion_timestamp
-  local diff_time
+  local completion_time
   local avg_archive_time
   local source_size_running_text
   local dest_size
   local dest_size_text
   local comp_ratio
 
-  completion_timestamp="$(date +%s)"
-  diff_time=$(( completion_timestamp - start_timestamp ))
-  avg_archive_time=$(( ( diff_time / (TAR_VOLUME - 1) ) ))
+  completion_timestamp=$(date +%s)
+  completion_time=$(( completion_timestamp - start_timestamp + start_timestamp_running ))
+  avg_archive_time=$(( ( completion_time / (TAR_VOLUME - 1) ) ))
 
   source_size_running_text=$(printf "%'.0f" "$source_size_running")
 
@@ -30,7 +30,7 @@ function Completion_Stats()
   comp_ratio=$(( 100 - ( ( dest_size * 100) / source_size_running ) ))
 
   printf '\nBACKUP OPERATION COMPLETE\n'
-  printf 'Total runtime:                 %s\n' "$( Duration_Readable $diff_time )"
+  printf 'Total runtime:                 %s\n' "$( Duration_Readable $completion_time )"
   printf 'Average time per archive file: %s\n' "$( Duration_Readable $avg_archive_time )"
   printf 'Number of archive files:       %s\n' "$(( TAR_VOLUME - 1 ))"
   printf 'Total space backed up:         %sk\n' "$source_size_running_text"

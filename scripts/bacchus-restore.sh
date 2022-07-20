@@ -32,11 +32,11 @@
 
 scriptdir=$(dirname "$_")
 
-source "scripts/include/common/cleanup.sh" || { echo "scripts/include/common/cleanup.sh not found"; exit 1; }
+source "scripts/include/common/cleanup.sh"           || { echo "scripts/include/common/cleanup.sh not found"; exit 1; }
 source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
-source "scripts/include/common/load_persistence.sh" || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
+source "scripts/include/common/load_persistence.sh"  || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
 source "scripts/include/restore/completion_stats.sh" || { echo "scripts/include/restore/completion_stats.sh not found"; exit 1; }
-source "scripts/include/restore/process_volume.sh" || { echo "scripts/include/restore/process_volume.sh not found"; exit 1; }
+source "scripts/include/restore/process_volume.sh"   || { echo "scripts/include/restore/process_volume.sh not found"; exit 1; }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
@@ -83,7 +83,9 @@ Process_Volume "$BCS_BASENAME".tar "$BCS_DECRYPTDIR" "$BCS_COMPRESDIR"
 export BCS_DATAFILE="$BCS_TMPFILE".runtime
 runtime_data=$(jo bcs_source="$BCS_SOURCE" \
                   start_timestamp="$timestamp" \
+                  start_timestamp_running=0 \
                   last_timestamp="$timestamp" \
+                  last_timestamp_running=0 \
                   source_size_running=$source_actual_size \
                   dest_size_running=$dest_actual_size \
                   archive_volumes=1)

@@ -71,10 +71,12 @@ printf '\n'
 
 # Populate external data structure with starting values
 export BCS_DATAFILE="$BCS_TMPFILE".runtime
-timestamp="$(date +%s)"
+timestamp=$(date +%s)
 runtime_data=$(jo bcs_dest="$BCS_DEST" \
-                  start_timestamp="$timestamp" \
-                  last_timestamp="$timestamp" \
+                  start_timestamp=$timestamp \
+                  start_timestamp_running=0 \
+                  last_timestamp=$timestamp \
+                  last_timestamp_running=0 \
                   source_size_total=$total_source_size \
                   source_size_running=0 \
                   dest_size_running=0 \

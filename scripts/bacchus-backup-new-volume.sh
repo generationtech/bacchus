@@ -15,9 +15,9 @@
 #       bacchus does not encrypt backup
 
 source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
-source "scripts/include/common/load_persistence.sh" || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
+source "scripts/include/common/load_persistence.sh"  || { echo "scripts/include/common/load_persistence.sh not found"; exit 1; }
 source "scripts/include/backup/incremental_stats.sh" || { echo "scripts/include/backup/incremental_stats.sh not found"; exit 1; }
-source "scripts/include/backup/completion_stats.sh" || { echo "scripts/include/backup/completion_stats.sh not found"; exit 1; }
+source "scripts/include/backup/completion_stats.sh"  || { echo "scripts/include/backup/completion_stats.sh not found"; exit 1; }
 
 # Pull current runtime data from persistence file
 Load_Persistence
@@ -40,7 +40,9 @@ esac
 while true; do
   availablespace=$(df -kP "$bcs_dest" | awk '{print $4}' | tail -1)
   lowspace="$(( BCS_VOLUMESIZE * BCS_LOWDISKSPACE ))"
+
   if [ "$availablespace" -lt "$lowspace" ]; then
+    stop_timestamp=$(date +%s)
     printf "\nLOW AVAILABLE SPACE on %s (%s < %s)\n" "$bcs_dest" "$availablespace" "$lowspace"
     printf "Either free-up space or swap out storage device and press enter\n"
     printf "Or enter a new destination path and press enter\n"
@@ -51,6 +53,12 @@ while true; do
       bcs_dest="$newpath"
     fi
   else
+    if [ -n "$newpath" ]; then
+      unset newpath
+      resume_timestamp=$(date +%s)
+      start_timestamp_running=$(( start_timestamp_running + (resume_timestamp - stop_timestamp) ))
+      last_timestamp_running=$(( last_timestamp_running + (resume_timestamp - stop_timestamp) ))
+    fi
     break
   fi
 done
@@ -69,7 +77,7 @@ archive_source_size=$(stat -c %s "$source")
 archive_source_size_scaled=$(( archive_source_size / 1024 ))
 source_size_running=$(( source_size_running + archive_source_size_scaled ))
 
-last_timestamp="$(date +%s)"
+last_timestamp=$(date +%s)
 
 # Commpression if enabled
 if [ "$BCS_COMPRESS" == "on" ]; then
@@ -105,8 +113,10 @@ esac
 
 # Update runtime data to persistence file
 runtime_data=$(jo bcs_dest="$bcs_dest" \
-                  start_timestamp="$start_timestamp" \
-                  last_timestamp="$last_timestamp" \
+                  start_timestamp=$start_timestamp \
+                  start_timestamp_running=$start_timestamp_running \
+                  last_timestamp=$last_timestamp \
+                  last_timestamp_running=0 \
                   source_size_total=$source_size_total \
                   source_size_running=$source_size_running \
                   dest_size_running=$dest_size_running \
