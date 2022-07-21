@@ -43,6 +43,7 @@ while true; do
   fi
 
   if [ ! -f "$source" ]; then
+    stop_timestamp=$(date +%s)
     printf "\nArchive volume %s NOT FOUND in %s\n" "$(basename "$source")" "$bcs_source"
     printf "Either place this file in the source directory and press enter\n"
     printf "Or enter a new source path and press enter\n"
@@ -52,6 +53,12 @@ while true; do
       bcs_source="$newpath"
     fi
   else
+    if [ -n "$newpath" ]; then
+      unset newpath
+      resume_timestamp=$(date +%s)
+      start_timestamp_running=$(( start_timestamp_running + (resume_timestamp - stop_timestamp) ))
+      last_timestamp_running=$(( last_timestamp_running + (resume_timestamp - stop_timestamp) ))
+    fi
     break
   fi
 done
@@ -68,7 +75,7 @@ else
   printf '%s\n' "$filename"
 fi
 
-last_timestamp="$(date +%s)"
+last_timestamp=$(date +%s)
 source="$bcs_source"/"$filename"
 Process_Volume "$filename" "$BCS_DECRYPTDIR" "$BCS_COMPRESDIR"
 
@@ -81,10 +88,10 @@ esac
 
 # Update runtime data to persistence file
 runtime_data=$(jo bcs_source="$bcs_source" \
-                  start_timestamp="$start_timestamp" \
-                  start_timestamp_running="$start_timestamp_running" \
-                  last_timestamp="$last_timestamp" \
-                  last_timestamp_running="$last_timestamp_running" \
+                  start_timestamp=$start_timestamp \
+                  start_timestamp_running=$start_timestamp_running \
+                  last_timestamp=$last_timestamp \
+                  last_timestamp_running=0 \
                   source_size_running="$(( source_size_running + source_actual_size ))" \
                   dest_size_running="$(( dest_size_running + dest_actual_size ))" \
                   archive_volumes=$(( archive_volumes + 1 )) )

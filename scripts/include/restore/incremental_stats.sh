@@ -13,9 +13,9 @@ function Incremental_Stats()
 
   local archive_max_name
   local max_source_size_text
-  local completion_timestamp
-  local diff_time
-  local last_time
+  local incremental_timestamp
+  local elapsed_time
+  local incremental_time
   local avg_archive_time
   local comp_ratio
   local source_size_running_text
@@ -24,10 +24,10 @@ function Incremental_Stats()
   archive_max_name=$(( ${#BCS_BASENAME} + 10 ))
   max_source_size_text=$(( 20 ))
 
-  completion_timestamp="$(date +%s)"
-  diff_time=$(( completion_timestamp - start_timestamp ))
-  last_time=$(( completion_timestamp - last_timestamp ))
-  avg_archive_time=$(( (diff_time / (TAR_VOLUME - 1) ) ))
+  incremental_timestamp=$(date +%s)
+  elapsed_time=$(( incremental_timestamp - start_timestamp - start_timestamp_running ))
+  incremental_time=$(( incremental_timestamp - last_timestamp - last_timestamp_running ))
+  avg_archive_time=$(( (elapsed_time / (TAR_VOLUME - 1) ) ))
 
   comp_ratio=$(( 100 - ( (source_size_running * 100) / dest_size_running) ))
   source_size_running_text=$(printf "%'.0f" "$source_size_running")
@@ -44,11 +44,11 @@ function Incremental_Stats()
 %-${max_source_size_text}s \
 %(%m-%d-%Y %H:%M:%S)T\n" \
     "$filename" \
-    "elapsed..$(Duration_Readable $diff_time)" \
-    "last..$(Duration_Readable $last_time)" \
+    "elapsed..$(Duration_Readable $elapsed_time)" \
+    "last..$(Duration_Readable $incremental_time)" \
     "avg..$(Duration_Readable $avg_archive_time)" \
     "compr..${comp_ratio}%" \
     "source..${source_size_running_text}k" \
     "dest..${dest_size_running_text}k" \
-    "$completion_timestamp"
+    "$incremental_timestamp"
 }

@@ -74,7 +74,7 @@ fi
 
 # Process first (possibly only) backup volume
 echo "$BCS_BASENAME".tar
-timestamp="$(date +%s)"
+timestamp=$(date +%s)
 
 source="$BCS_SOURCE"/"$BCS_BASENAME".tar
 Process_Volume "$BCS_BASENAME".tar "$BCS_DECRYPTDIR" "$BCS_COMPRESDIR"
@@ -82,9 +82,9 @@ Process_Volume "$BCS_BASENAME".tar "$BCS_DECRYPTDIR" "$BCS_COMPRESDIR"
 # Populate external data structure with starting values
 export BCS_DATAFILE="$BCS_TMPFILE".runtime
 runtime_data=$(jo bcs_source="$BCS_SOURCE" \
-                  start_timestamp="$timestamp" \
+                  start_timestamp=$timestamp \
                   start_timestamp_running=0 \
-                  last_timestamp="$timestamp" \
+                  last_timestamp=$timestamp \
                   last_timestamp_running=0 \
                   source_size_running=$source_actual_size \
                   dest_size_running=$dest_actual_size \
