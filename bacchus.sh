@@ -5,7 +5,7 @@
 # If you need to make changes later, edit 'bacchus2-parsing.sh' directly, and regenerate by running
 # 'argbash --strip user-content "scripts/bacchus-parsing.sh" -o "scripts/bacchus-parsing.sh"'
 script_dir=$(dirname "$_")/scripts
-source "${script_dir}/bacchus-parsing.sh" || { echo "Couldn't find 'bacchus-parsing.sh' parsing library in the '$script_dir' directory"; exit 1; }
+source "${script_dir}/include/common/bacchus-parsing.sh" || { echo "Couldn't find 'bacchus-parsing.sh' parsing library in the '$script_dir' directory"; exit 1; }
 # vvv  PLACE YOUR CODE HERE  vvv
 
 export BCS_SOURCE="$_arg_source"

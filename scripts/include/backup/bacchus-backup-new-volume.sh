@@ -14,7 +14,6 @@
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
 #       bacchus does not encrypt backup
 
-source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
 source "scripts/include/common/load_persistence.sh"  || { echo "scripts/include/common/load_persistence.sh not found";  exit 1; }
 source "scripts/include/backup/incremental_stats.sh" || { echo "scripts/include/backup/incremental_stats.sh not found"; exit 1; }
 source "scripts/include/backup/completion_stats.sh"  || { echo "scripts/include/backup/completion_stats.sh not found";  exit 1; }
@@ -57,7 +56,7 @@ while true; do
       unset newpath
       resume_timestamp=$(date +%s)
       start_timestamp_running=$(( start_timestamp_running + (resume_timestamp - stop_timestamp) ))
-      last_timestamp_running=$(( last_timestamp_running + (resume_timestamp - stop_timestamp) ))
+      incremental_timestamp_running=$(( incremental_timestamp_running + (resume_timestamp - stop_timestamp) ))
     fi
     break
   fi
@@ -77,7 +76,7 @@ archive_source_size=$(stat -c %s "$source")
 archive_source_size_scaled=$(( archive_source_size / 1024 ))
 source_size_running=$(( source_size_running + archive_source_size_scaled ))
 
-last_timestamp=$(date +%s)
+incremental_timestamp=$(date +%s)
 
 # Commpression if enabled
 if [ "$BCS_COMPRESS" == "on" ]; then
@@ -115,8 +114,13 @@ esac
 runtime_data=$(jo bcs_dest="$bcs_dest" \
                   start_timestamp=$start_timestamp \
                   start_timestamp_running=$start_timestamp_running \
-                  last_timestamp=$last_timestamp \
-                  last_timestamp_running=0 \
+                  incremental_timestamp=$incremental_timestamp \
+                  incremental_timestamp_running=0 \
+                  remain_text_size_running=$remain_text_size_running \
+                  elapsed_text_size_running=$elapsed_text_size_running \
+                  incremental_text_size_running=$incremental_text_size_running \
+                  avg_text_size_running=$avg_text_size_running \
+                  compr_text_size_running=$compr_text_size_running \
                   source_size_total=$source_size_total \
                   source_size_running=$source_size_running \
                   dest_size_running=$dest_size_running \

@@ -57,7 +57,7 @@ while true; do
       unset newpath
       resume_timestamp=$(date +%s)
       start_timestamp_running=$(( start_timestamp_running + (resume_timestamp - stop_timestamp) ))
-      last_timestamp_running=$(( last_timestamp_running + (resume_timestamp - stop_timestamp) ))
+      incremental_timestamp_running=$(( incremental_timestamp_running + (resume_timestamp - stop_timestamp) ))
     fi
     break
   fi
@@ -75,7 +75,7 @@ else
   printf '%s\n' "$filename"
 fi
 
-last_timestamp=$(date +%s)
+incremental_timestamp=$(date +%s)
 source="$bcs_source"/"$filename"
 Process_Volume "$filename" "$BCS_DECRYPTDIR" "$BCS_COMPRESDIR"
 
@@ -90,8 +90,8 @@ esac
 runtime_data=$(jo bcs_source="$bcs_source" \
                   start_timestamp=$start_timestamp \
                   start_timestamp_running=$start_timestamp_running \
-                  last_timestamp=$last_timestamp \
-                  last_timestamp_running=0 \
+                  incremental_timestamp=$incremental_timestamp \
+                  incremental_timestamp_running=0 \
                   source_size_running="$(( source_size_running + source_actual_size ))" \
                   dest_size_running="$(( dest_size_running + dest_actual_size ))" \
                   archive_volumes=$(( archive_volumes + 1 )) )

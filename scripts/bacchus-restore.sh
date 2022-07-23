@@ -84,8 +84,8 @@ export BCS_DATAFILE="$BCS_TMPFILE".runtime
 runtime_data=$(jo bcs_source="$BCS_SOURCE" \
                   start_timestamp=$timestamp \
                   start_timestamp_running=0 \
-                  last_timestamp=$timestamp \
-                  last_timestamp_running=0 \
+                  incremental_timestamp=$timestamp \
+                  incremental_timestamp_running=0 \
                   source_size_running=$source_actual_size \
                   dest_size_running=$dest_actual_size \
                   archive_volumes=1)
@@ -97,7 +97,7 @@ else
   tarargs='-xpM'
 fi
 
-tar "$tarargs" --format posix --new-volume-script "$scriptdir/bacchus-restore-new-volume.sh" --volno-file "$BCS_TMPFILE".volno -f "$source" --directory "$BCS_DEST"
+tar "$tarargs" --format posix --new-volume-script "$scriptdir/include/restore/bacchus-restore-new-volume.sh" --volno-file "$BCS_TMPFILE".volno -f "$source" --directory "$BCS_DEST"
 
 # Pull current runtime data from persistence file
 Load_Persistence
