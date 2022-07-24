@@ -36,6 +36,9 @@ function Incremental_Stats()
 # Don't hate me for being ugly
   printf "\
 %-${archive_max_name}s \
+%${archive_max_num}s \
+%4s  \
+%-${remain_text_size}s \
 %-18s \
 %-13s \
 %-13s \
@@ -44,6 +47,9 @@ function Incremental_Stats()
 %-${max_source_size_text}s \
 %(%m-%d-%Y %H:%M:%S)T\n" \
     "$filename" \
+    "/$archive_volumes" \
+    "$(( ( (TAR_VOLUME - 1) * 100) / archive_volumes ))%" \
+    "remain..$remain_text" \
     "elapsed..$(Duration_Readable $elapsed_time)" \
     "last..$(Duration_Readable $incremental_time)" \
     "avg..$(Duration_Readable $avg_time)" \

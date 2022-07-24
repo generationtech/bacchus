@@ -94,7 +94,7 @@ runtime_data=$(jo bcs_source="$bcs_source" \
                   incremental_timestamp_running=0 \
                   source_size_running="$(( source_size_running + source_actual_size ))" \
                   dest_size_running="$(( dest_size_running + dest_actual_size ))" \
-                  archive_volumes=$(( archive_volumes + 1 )) )
+                  archive_volumes=$archive_volumes )
 echo "$runtime_data" > "$BCS_DATAFILE"
 
 exit 0

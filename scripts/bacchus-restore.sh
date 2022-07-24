@@ -41,36 +41,69 @@ source "scripts/include/restore/process_volume.sh"   || { echo "scripts/include/
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
 
+source=$(find "$BCS_SOURCE" -name "${BCS_BASENAME}".tar* | sort | tail -1)
+
+if [[ "$source" == *".gz"*  ]]; then
+  BCS_COMPRESS="on"
+else
+  BCS_COMPRESS="off"
+fi
+
+if [[ "$source" != *".gpg"*  ]]; then
+  unset BCS_PASSWORD
+fi
+
+# Determine max uncompressed size of individual archive volume
+ramdisk_size_tmpdir="$BCS_TMPFILE".ramdisk_size
+mkdir "$ramdisk_size_tmpdir"
+source="$BCS_SOURCE"/"$BCS_BASENAME".tar
+Process_Volume "$BCS_BASENAME".tar "$ramdisk_size_tmpdir" "$ramdisk_size_tmpdir"
+BCS_VOLUMESIZE=$dest_actual_size
+rm -rf "$ramdisk_size_tmpdir"
+
+# Determine uncompressed size of last archive volume
+ramdisk_size_tmpdir="$BCS_TMPFILE".ramdisk_size
+mkdir "$ramdisk_size_tmpdir"
+source=$(find "$BCS_SOURCE" -name "${BCS_BASENAME}".tar* | sort -V | tail -1)
+source="${source//.gpg/}"
+source="${source//.gz/}"
+Process_Volume "$BCS_BASENAME".tar "$ramdisk_size_tmpdir" "$ramdisk_size_tmpdir"
+bcs_volumesize_end=$dest_actual_size
+rm -rf "$ramdisk_size_tmpdir"
+
+# Setup ramdisk if needed
 if [ "$BCS_COMPRESS" == "off" ] && [ -z "$BCS_PASSWORD" ]; then
   BCS_TARDIR="$BCS_DEST"
-else
-  # Determine size for ramdisk based on the starting archive processed size
-  if [ "$BCS_RAMDISK" == "on" ]; then
-    ramdisk_size_tmpdir="$BCS_TMPFILE".ramdisk_size
-    mkdir "$ramdisk_size_tmpdir"
-
-    source="$BCS_SOURCE"/"$BCS_BASENAME".tar
-    Process_Volume "$BCS_BASENAME".tar "$ramdisk_size_tmpdir" "$ramdisk_size_tmpdir"
-
-    BCS_VOLUMESIZE=$dest_actual_size
-    rm -rf "$ramdisk_size_tmpdir"
-
-    ramdisk_size=0
-    if [ "$BCS_COMPRESS" == "on" ]; then
-      ramdisk_size="$(( ramdisk_size + BCS_VOLUMESIZE ))"
-    fi
-    if [ -n "$BCS_PASSWORD" ]; then
-      ramdisk_size="$(( ramdisk_size + BCS_VOLUMESIZE ))"
-    fi
-    ramdisk_dir="$BCS_TMPFILE".ramdisk
-    ramdisk_size="$(( ( (ramdisk_size * 1024) + ( (BCS_VOLUMESIZE * 1024) / 100) ) ))"
-    mkdir -p "$ramdisk_dir"
-    mount -t tmpfs -o size="$ramdisk_size" tmpfs "$ramdisk_dir"
-    BCS_COMPRESDIR="$ramdisk_dir"
-    BCS_DECRYPTDIR="$ramdisk_dir"
-    BCS_TARDIR="$ramdisk_dir"
+elif [ "$BCS_RAMDISK" == "on" ]; then
+  ramdisk_size=0
+  if [ "$BCS_COMPRESS" == "on" ]; then
+    ramdisk_size="$(( ramdisk_size + BCS_VOLUMESIZE ))"
   fi
+  if [ -n "$BCS_PASSWORD" ]; then
+    ramdisk_size="$(( ramdisk_size + BCS_VOLUMESIZE ))"
+  fi
+  ramdisk_dir="$BCS_TMPFILE".ramdisk
+  ramdisk_size="$(( ( (ramdisk_size * 1024) + ( (BCS_VOLUMESIZE * 1024) / 100) ) ))"
+  mkdir -p "$ramdisk_dir"
+  mount -t tmpfs -o size="$ramdisk_size" tmpfs "$ramdisk_dir"
+  BCS_COMPRESDIR="$ramdisk_dir"
+  BCS_DECRYPTDIR="$ramdisk_dir"
+  BCS_TARDIR="$ramdisk_dir"
 fi
+
+# Estimate total restore size and number of archive volumes
+total_volumes=$(find "$BCS_SOURCE" -name "${BCS_BASENAME}".tar* | wc -l)
+total_source_size=$(du -sk --apparent-size "$BCS_SOURCE" | awk '{print $1}')
+
+if [ "$BCS_ESTIMATE" == "on" ]; then
+  printf '\nEstimated number of volumes: %s\n' "$total_volumes"
+  printf "Estimated source size:       %'.0fk\n" "$total_source_size"
+  total_dest_size=$(( (total_volumes * BCS_VOLUMESIZE) + bcs_volumesize_end ))
+  printf "Estimated restored size:     %'.0fk\n" "$total_dest_size"
+  comp_ratio=$(( 100 - ( (total_source_size * 100) / total_dest_size) ))
+  printf "Estimated compression ratio: %s%%\n" "$comp_ratio"
+fi
+printf '\n'
 
 # Process first (possibly only) backup volume
 echo "$BCS_BASENAME".tar
@@ -86,9 +119,10 @@ runtime_data=$(jo bcs_source="$BCS_SOURCE" \
                   start_timestamp_running=0 \
                   incremental_timestamp=$timestamp \
                   incremental_timestamp_running=0 \
+                  source_size_total=$total_source_size \
                   source_size_running=$source_actual_size \
                   dest_size_running=$dest_actual_size \
-                  archive_volumes=1)
+                  archive_volumes=$total_volumes)
 echo "$runtime_data" > "$BCS_DATAFILE"
 
 if [ "$BCS_VERBOSETAR" == "on" ]; then
