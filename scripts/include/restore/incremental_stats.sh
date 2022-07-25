@@ -38,8 +38,8 @@ function Incremental_Stats()
   local incremental_time
   local incremental_time_text
   local incremental_time_text_size
-  local max_dest_size_text
-  local max_source_size_text
+  local max_dest_size_text_length
+  local max_source_size_text_length
   local remain_text
   local remain_text_size
   local remain_time
@@ -69,8 +69,8 @@ function Incremental_Stats()
   elif [ $dest_size_text_length -gt $size_text_running ]; then
     size_text_running=$dest_size_text_length
   fi
-  max_source_size_text=$(( size_text_running + (size_text_running / 3) + 9 ))
-  max_dest_size_text=$(( max_source_size_text - 1 ))
+  max_source_size_text_length=$(( size_text_running + (size_text_running / 3) + 9 ))
+  max_dest_size_text_length=$(( max_source_size_text_length - 1 ))
 
   remain_text=$(Duration_Readable $remain_time)
   remain_text_size=${#remain_text}
@@ -113,8 +113,8 @@ function Incremental_Stats()
 %-${incremental_time_text_size}s \
 %-${avg_text_size}s \
 %-${comp_ratio_text_size}s \
-%-${max_source_size_text}s  \
-%-${max_dest_size_text}s \
+%-${max_source_size_text_length}s  \
+%-${max_dest_size_text_length}s \
 %(%m-%d-%Y %H:%M:%S)T\n" \
     "$filename" \
     "/$archive_volumes" \

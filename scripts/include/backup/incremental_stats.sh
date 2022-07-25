@@ -44,11 +44,11 @@ function Incremental_Stats()
   local comp_ratio_text
   local comp_ratio_text_size
   local source_size_text_length
-  local max_source_size_text
+  local max_source_size_text_length
   local source_size_running_text
   local dest_size_text
 
-  archive_max_name=$(( ${#BCS_BASENAME} + ${#archive_volumes} + 5 ))
+  archive_max_name=$(( ${#BCS_BASENAME} + ${#archive_volumes} + 6 ))
   archive_max_num=$(( ${#archive_volumes} + 1 ))
 
   timestamp=$(date +%s)
@@ -79,7 +79,7 @@ function Incremental_Stats()
   if [ $remain_text_size -gt $remain_text_size_running ]; then
     remain_text_size_running=$remain_text_size
   fi
-  remain_text_size=$(( remain_text_size_running + 9 ))
+  remain_text_size=$(( remain_text_size_running + 10 ))
 
   elapsed_text=$(Duration_Readable $elapsed_time)
   elapsed_text_size=$(( remain_text_size + 1 ))
@@ -89,50 +89,50 @@ function Incremental_Stats()
   if [ $incremental_time_text_size -gt $incremental_text_size_running ]; then
     incremental_text_size_running=$incremental_time_text_size
   fi
-  incremental_time_text_size=$(( incremental_text_size_running + 7 ))
+  incremental_time_text_size=$(( incremental_text_size_running + 8 ))
 
   avg_text=$(Duration_Readable $avg_time)
   avg_text_size=${#avg_text}
   if [ $avg_text_size -gt $avg_text_size_running ]; then
     avg_text_size_running=$avg_text_size
   fi
-  avg_text_size=$(( avg_text_size_running + 6 ))
+  avg_text_size=$(( avg_text_size_running + 7 ))
 
   comp_ratio_text="$comp_ratio"
   comp_ratio_text_size=${#comp_ratio_text}
   if [ $comp_ratio_text_size -gt $comp_ratio_text_size_running ]; then
     comp_ratio_text_size_running=$comp_ratio_text_size
   fi
-  comp_ratio_text_size=$(( comp_ratio_text_size_running + 9 ))
+  comp_ratio_text_size=$(( comp_ratio_text_size_running + 10 ))
 
   source_size_text_length=${#source_size_total}
-  max_source_size_text=$(( source_size_text_length + (source_size_text_length / 3) + 9 ))
+  max_source_size_text_length=$(( source_size_text_length + ( (source_size_text_length - 1) / 3) + 11 ))
   source_size_running_text=$(printf "%'.0f" "$source_size_running")
 
+  max_dest_size_text_length=$(( max_source_size_text_length - 2 ))
   dest_size_text=$(printf "%'.0f" "$dest_size")
-  max_dest_size_text=$(( max_source_size_text - 1 ))
 
 # Don't hate me for being ugly
   if [ $incremental_time == 0 ]; then
     printf "\
-%-${archive_max_name}s \
+%-${archive_max_name}s\
 %${archive_max_num}s \
-%4s\n"  \
+%4s\n"\
     "$TAR_ARCHIVE" \
     "/$archive_volumes" \
     "$(( ( (TAR_VOLUME - 1) * 100) / archive_volumes ))%"
   else
     printf "\
-%-${archive_max_name}s \
+%-${archive_max_name}s\
 %${archive_max_num}s \
 %4s  \
-%-${remain_text_size}s \
-%-${elapsed_text_size}s \
-%-${incremental_time_text_size}s \
-%-${avg_text_size}s \
-%-${comp_ratio_text_size}s \
-%-${max_source_size_text}s  \
-%-${max_dest_size_text}s \
+%-${remain_text_size}s\
+%-${elapsed_text_size}s\
+%-${incremental_time_text_size}s\
+%-${avg_text_size}s\
+%-${comp_ratio_text_size}s\
+%-${max_source_size_text_length}s\
+%-${max_dest_size_text_length}s\
 %(%m-%d-%Y %H:%M:%S)T\n" \
     "$TAR_ARCHIVE" \
     "/$archive_volumes" \

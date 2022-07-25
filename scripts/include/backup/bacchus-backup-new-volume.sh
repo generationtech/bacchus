@@ -51,7 +51,7 @@ while true; do
 
   if [ "$availablespace" -lt "$lowspace" ]; then
     stop_timestamp=$(date +%s)
-    printf "\nLOW AVAILABLE SPACE on %s (%s < %s)\n" "$bcs_dest" "$availablespace" "$lowspace"
+    printf "\nLOW AVAILABLE SPACE on %s (%sk < %sk)\n" "$bcs_dest" "$(printf "%'.0f" "$availablespace")" "$(printf "%'.0f" "$lowspace")"
     printf "Either free-up space or swap out storage device and press enter,\n"
     printf "Or enter a new destination path and press enter\n"
     read -r newpath
