@@ -44,7 +44,8 @@ while true; do
 
   if [ ! -f "$source" ]; then
     stop_timestamp=$(date +%s)
-    printf "\nArchive volume %s NOT FOUND in %s\n" "$(basename "$source")" "$bcs_source"
+    printf "\nArchive volume: %s\n" "$(basename "$source")"
+    printf "NOT FOUND in:   %s\n" "$bcs_source"
     printf "Either place this file in the source directory and press enter\n"
     printf "Or enter a new source path and press enter\n"
     read newpath
@@ -58,6 +59,12 @@ while true; do
       resume_timestamp=$(date +%s)
       start_timestamp_running=$(( start_timestamp_running + (resume_timestamp - stop_timestamp) ))
       incremental_timestamp_running=$(( incremental_timestamp_running + (resume_timestamp - stop_timestamp) ))
+
+      new_source_size=$(du -sk --apparent-size "$bcs_source" | awk '{print $1}')
+      source_size_total=$(( source_size_total + new_source_size ))
+
+      new_volumes=$(find "$bcs_source" -name "${BCS_BASENAME}".tar* | wc -l)
+      archive_volumes=$(( archive_volumes + new_volumes ))
     fi
     break
   fi
@@ -92,6 +99,10 @@ runtime_data=$(jo bcs_source="$bcs_source" \
                   start_timestamp_running=$start_timestamp_running \
                   incremental_timestamp=$incremental_timestamp \
                   incremental_timestamp_running=0 \
+                  remain_text_size_running=$remain_text_size_running \
+                  incremental_text_size_running=$incremental_text_size_running \
+                  avg_text_size_running=$avg_text_size_running \
+                  compr_text_size_running=$compr_text_size_running \
                   source_size_running="$(( source_size_running + source_actual_size ))" \
                   dest_size_running="$(( dest_size_running + dest_actual_size ))" \
                   archive_volumes=$archive_volumes )

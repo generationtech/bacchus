@@ -57,15 +57,15 @@ else
 fi
 
 # Estimate total backup size and required archive volumes
-total_source_size=$(du -sk --apparent-size "$BCS_SOURCE" | awk '{print $1}')
-total_volumes=$(( total_source_size / BCS_VOLUMESIZE ))
-if [[ $(( BCS_VOLUMESIZE * total_volumes )) -lt $total_source_size ]]; then
+source_size_total=$(du -sk --apparent-size "$BCS_SOURCE" | awk '{print $1}')
+total_volumes=$(( source_size_total / BCS_VOLUMESIZE ))
+if [[ $(( BCS_VOLUMESIZE * total_volumes )) -lt $source_size_total ]]; then
   total_volumes=$(( total_volumes + 1 ))
 fi
 
 if [ "$BCS_ESTIMATE" == "on" ]; then
   printf 'Estimating total size of:  %s\n\n' "$BCS_SOURCE"
-  printf "Total size:                %'.0fk\n" "$total_source_size"
+  printf "Total size:                %'.0fk\n" "$source_size_total"
   printf "Number of archive volumes: %s (%'.0fk each)\n" "$total_volumes" "$BCS_VOLUMESIZE"
 fi
 printf '\n'
@@ -79,11 +79,10 @@ runtime_data=$(jo bcs_dest="$BCS_DEST" \
                   incremental_timestamp=$timestamp \
                   incremental_timestamp_running=0 \
                   remain_text_size_running=0 \
-                  elapsed_text_size_running=0 \
                   incremental_text_size_running=0 \
                   avg_text_size_running=0 \
                   compr_text_size_running=0 \
-                  source_size_total=$total_source_size \
+                  source_size_total=$source_size_total \
                   source_size_running=0 \
                   dest_size_running=0 \
                   archive_volumes=$total_volumes)

@@ -117,7 +117,6 @@ runtime_data=$(jo bcs_dest="$bcs_dest" \
                   incremental_timestamp=$incremental_timestamp \
                   incremental_timestamp_running=0 \
                   remain_text_size_running=$remain_text_size_running \
-                  elapsed_text_size_running=$elapsed_text_size_running \
                   incremental_text_size_running=$incremental_text_size_running \
                   avg_text_size_running=$avg_text_size_running \
                   compr_text_size_running=$compr_text_size_running \

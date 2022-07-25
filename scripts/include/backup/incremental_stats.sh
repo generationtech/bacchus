@@ -64,11 +64,7 @@ function Incremental_Stats()
   remain_text_size=$(( remain_text_size_running + 9 ))
 
   elapsed_text=$(Duration_Readable $elapsed_time)
-  elapsed_text_size=${#elapsed_text}
-  if [ $elapsed_text_size -gt $elapsed_text_size_running ]; then
-    elapsed_text_size_running=$elapsed_text_size
-  fi
-  elapsed_text_size=$(( elapsed_text_size_running + 10 ))
+  elapsed_text_size=$(( remain_text_size + 1 ))
 
   incremental_time_text=$(Duration_Readable $incremental_time)
   incremental_time_text_size=${#incremental_time_text}

@@ -34,11 +34,11 @@ function Completion_Stats()
   printf 'Total runtime:                 %s\n' "$(Duration_Readable $completion_time)"
   printf 'Average time per archive file: %s\n' "$(Duration_Readable $avg_time)"
   printf 'Number of archive files:       %s\n' "$(( TAR_VOLUME - 1 ))"
-  printf 'Total space backed up:         %sk\n' "$source_size_running_text"
+  printf 'Total size of backup:          %sk\n' "$source_size_running_text"
   if [ "$dest_size_running" -ne 0 ]; then
-    printf 'Total space on destinations:   %sk\n' "$dest_size_text"
+    printf 'Total size of destinations:    %sk\n' "$dest_size_text"
   else
-    printf 'Total space on destination:    %sk\n' "$dest_size_text"
+    printf 'Total size of destination:     %sk\n' "$dest_size_text"
   fi
   printf 'Overall compression ratio:     %s%%\n' "$comp_ratio"
 }

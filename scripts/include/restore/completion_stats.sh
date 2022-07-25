@@ -28,7 +28,7 @@ function Completion_Stats()
   printf 'Total runtime:                 %s\n' "$(Duration_Readable $completion_time)"
   printf 'Average time per archive file: %s\n' "$(Duration_Readable $avg_time)"
   printf 'Number of archive files:       %s\n' "$archive_volumes"
-  printf 'Total space on source:         %sk\n' "$source_size_running_text"
-  printf 'Total space restored:          %sk\n' "$dest_size_running_text"
+  printf 'Total size of source:          %sk\n' "$source_size_running_text"
+  printf 'Total size of restore:         %sk\n' "$dest_size_running_text"
   printf 'Overall compression ratio:     %s%%\n' "$comp_ratio"
 }

@@ -93,14 +93,14 @@ fi
 
 # Estimate total restore size and number of archive volumes
 total_volumes=$(find "$BCS_SOURCE" -name "${BCS_BASENAME}".tar* | wc -l)
-total_source_size=$(du -sk --apparent-size "$BCS_SOURCE" | awk '{print $1}')
+source_size_total=$(du -sk --apparent-size "$BCS_SOURCE" | awk '{print $1}')
 
 if [ "$BCS_ESTIMATE" == "on" ]; then
   printf '\nEstimated number of volumes: %s\n' "$total_volumes"
-  printf "Estimated source size:       %'.0fk\n" "$total_source_size"
+  printf "Estimated size of source:    %'.0fk\n" "$source_size_total"
   total_dest_size=$(( (total_volumes * BCS_VOLUMESIZE) + bcs_volumesize_end ))
-  printf "Estimated restored size:     %'.0fk\n" "$total_dest_size"
-  comp_ratio=$(( 100 - ( (total_source_size * 100) / total_dest_size) ))
+  printf "Estimated size of restore:   %'.0fk\n" "$total_dest_size"
+  comp_ratio=$(( 100 - ( (source_size_total * 100) / total_dest_size) ))
   printf "Estimated compression ratio: %s%%\n" "$comp_ratio"
 fi
 printf '\n'
@@ -119,7 +119,11 @@ runtime_data=$(jo bcs_source="$BCS_SOURCE" \
                   start_timestamp_running=0 \
                   incremental_timestamp=$timestamp \
                   incremental_timestamp_running=0 \
-                  source_size_total=$total_source_size \
+                  remain_text_size_running=0 \
+                  incremental_text_size_running=0 \
+                  avg_text_size_running=0 \
+                  compr_text_size_running=0 \
+                  source_size_total=$source_size_total \
                   source_size_running=$source_actual_size \
                   dest_size_running=$dest_actual_size \
                   archive_volumes=$total_volumes)
