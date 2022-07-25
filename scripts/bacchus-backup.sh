@@ -14,16 +14,17 @@
 #	bacchus-backup.sh
 #
 # Utilizes these environment variables:
-#	BCS_SOURCE     - Directory to backup
-#	BCS_DEST       - directory location of archive files
 #	BCS_BASENAME   - Base filename for backup archive
-#	BCS_VOLUMESIZE - Size of each volume in kB
-#	BCS_RAMDISK    - Boolean enabling ramdisk
-#	BCS_TARDIR     - Intermediate area for tar
-#	BCS_COMPRESDIR - Intermediate area to store compressed volume
 #	BCS_COMPRESS   - Boolean enabling compression
-# BCS_VERBOSETAR - Tar shows target filenames backed up
+#	BCS_COMPRESDIR - Intermediate area to store compressed volume
+#	BCS_DEST       - directory location of archive files
+# BCS_ESTIMATE   - Enables showing estimation info
 # BCS_PASSWORD   - Password to encrypt backup archive volumes
+#	BCS_RAMDISK    - Boolean enabling ramdisk
+#	BCS_SOURCE     - Directory to backup
+#	BCS_TARDIR     - Intermediate area for tar
+# BCS_VERBOSETAR - Tar shows target filenames backed up
+#	BCS_VOLUMESIZE - Size of each volume in kB
 #
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
 #       bacchus does not encrypt backup
@@ -74,6 +75,7 @@ printf '\n'
 export BCS_DATAFILE="$BCS_TMPFILE".runtime
 timestamp=$(date +%s)
 runtime_data=$(jo bcs_dest="$BCS_DEST" \
+                  archive_volumes=$total_volumes \
                   start_timestamp=$timestamp \
                   start_timestamp_running=0 \
                   incremental_timestamp=$timestamp \
@@ -81,11 +83,11 @@ runtime_data=$(jo bcs_dest="$BCS_DEST" \
                   remain_text_size_running=0 \
                   incremental_text_size_running=0 \
                   avg_text_size_running=0 \
-                  compr_text_size_running=0 \
+                  comp_ratio_text_size_running=0 \
                   source_size_total=$source_size_total \
                   source_size_running=0 \
                   dest_size_running=0 \
-                  archive_volumes=$total_volumes)
+                  size_text_running=0 )
 echo "$runtime_data" > "$BCS_DATAFILE"
 
 # Run tar backup

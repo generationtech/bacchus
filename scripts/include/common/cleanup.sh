@@ -1,3 +1,4 @@
+#!/bin/bash
 function Cleanup()
 {
   # Make sure these global variable have values before calling this function

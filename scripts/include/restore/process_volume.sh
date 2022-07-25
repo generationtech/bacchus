@@ -1,11 +1,12 @@
+#!/bin/bash
 function Process_Volume()
 {
   # Process a restore on a single archive volume
   #
   # Make sure these global variable have values before calling this function
-  # BCS_BASENAME
   # BCS_COMPRESS
   # BCS_PASSWORD
+  #
   # source
   #
   # Call this function with these arguements
@@ -17,8 +18,9 @@ function Process_Volume()
   #
   # These variables are set in this function as globals and can
   # be accessed by the caller after completion
-  # source_actual_size
+  #
   # dest_actual_size
+  # source_actual_size
 
   unset source_actual_size
   unset dest_actual_size

@@ -6,10 +6,19 @@
 #	bacchus-backup-new-volume.sh
 #
 # Utilizes these environment variables:
-#	BCS_DATAFILE   - File used to save/retrieve current destination location
-#	BCS_COMPRESDIR - Intermediate area to store compressed volume
+# TAR_ARCHIVE
+# BCS_BASENAME
 #	BCS_COMPRESS   - Boolean enabling compression
+#	BCS_COMPRESDIR - Intermediate area to store compressed volume
+#	BCS_DATAFILE   - File used to save/retrieve current destination location
+# BCS_ENDSTATISTICS - Enables showing completion statistics
+# BCS_LOWDISKSPACE
 # BCS_PASSWORD   - Password to encrypt backup archive volumes
+# BCS_STATISTICS    - Enables showing incremental statistics
+# BCS_VOLUMESIZE
+# TAR_FD
+# TAR_SUBCOMMAND
+# TAR_VOLUME
 #
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
 #       bacchus does not encrypt backup
@@ -43,7 +52,7 @@ while true; do
   if [ "$availablespace" -lt "$lowspace" ]; then
     stop_timestamp=$(date +%s)
     printf "\nLOW AVAILABLE SPACE on %s (%s < %s)\n" "$bcs_dest" "$availablespace" "$lowspace"
-    printf "Either free-up space or swap out storage device and press enter\n"
+    printf "Either free-up space or swap out storage device and press enter,\n"
     printf "Or enter a new destination path and press enter\n"
     read -r newpath
     printf "\n"
@@ -112,6 +121,7 @@ esac
 
 # Update runtime data to persistence file
 runtime_data=$(jo bcs_dest="$bcs_dest" \
+                  archive_volumes=$archive_volumes \
                   start_timestamp=$start_timestamp \
                   start_timestamp_running=$start_timestamp_running \
                   incremental_timestamp=$incremental_timestamp \
@@ -119,9 +129,9 @@ runtime_data=$(jo bcs_dest="$bcs_dest" \
                   remain_text_size_running=$remain_text_size_running \
                   incremental_text_size_running=$incremental_text_size_running \
                   avg_text_size_running=$avg_text_size_running \
-                  compr_text_size_running=$compr_text_size_running \
+                  comp_ratio_text_size_running=$comp_ratio_text_size_running \
                   source_size_total=$source_size_total \
                   source_size_running=$source_size_running \
                   dest_size_running=$dest_size_running \
-                  archive_volumes=$archive_volumes)
+                  size_text_running=$size_text_running )
 echo "$runtime_data" > "$BCS_DATAFILE"

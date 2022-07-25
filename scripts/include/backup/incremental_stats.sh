@@ -1,33 +1,51 @@
+#!/bin/bash
 function Incremental_Stats()
 {
   # Compute & output incremntal statistics
   #
   # Make sure these global variable have values before calling this function
   # BCS_BASENAME
+  # TAR_ARCHIVE
   # TAR_VOLUME
   #
   # archive_volumes
-  # source_size_total
-  # source_size_running
-  # dest_size_running
-  # start_timestamp
+  # avg_text_size_running
   # bcs_dest
+  # comp_ratio_text_size_running
+  # dest_size_running
+  # incremental_text_size_running
+  # incremental_timestamp
+  # incremental_timestamp_running
+  # remain_text_size_running
+  # source_size_running
+  # source_size_total
+  # start_timestamp
+  # start_timestamp_running
 
   source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/common/duration_readable.sh not found"; exit 1; }
 
   local archive_max_name
   local archive_max_num
-  local source_size_text
-  local max_source_size_text
-  local source_size_running_text
-  local elapsed_timestamp
-  local elapsed_time
+  local timestamp
   local avg_time
+  local elapsed_time
   local remain_time
   local incremental_time
-  local timestamp
   local dest_size
   local comp_ratio
+  local remain_text
+  local remain_text_size
+  local elapsed_text
+  local elapsed_text_size
+  local incremental_time_text
+  local incremental_time_text_size
+  local avg_text
+  local avg_text_size
+  local comp_ratio_text
+  local comp_ratio_text_size
+  local source_size_text_length
+  local max_source_size_text
+  local source_size_running_text
   local dest_size_text
 
   archive_max_name=$(( ${#BCS_BASENAME} + ${#archive_volumes} + 5 ))
@@ -80,18 +98,19 @@ function Incremental_Stats()
   fi
   avg_text_size=$(( avg_text_size_running + 6 ))
 
-  compr_text="$comp_ratio"
-  compr_text_size=${#compr_text}
-  if [ $compr_text_size -gt $compr_text_size_running ]; then
-    compr_text_size_running=$compr_text_size
+  comp_ratio_text="$comp_ratio"
+  comp_ratio_text_size=${#comp_ratio_text}
+  if [ $comp_ratio_text_size -gt $comp_ratio_text_size_running ]; then
+    comp_ratio_text_size_running=$comp_ratio_text_size
   fi
-  compr_text_size=$(( compr_text_size_running + 9 ))
+  comp_ratio_text_size=$(( comp_ratio_text_size_running + 9 ))
 
-  source_size_text=${#source_size_total}
-  max_source_size_text=$(( source_size_text + (source_size_text / 3) + 9 ))
+  source_size_text_length=${#source_size_total}
+  max_source_size_text=$(( source_size_text_length + (source_size_text_length / 3) + 9 ))
   source_size_running_text=$(printf "%'.0f" "$source_size_running")
 
   dest_size_text=$(printf "%'.0f" "$dest_size")
+  max_dest_size_text=$(( max_source_size_text - 1 ))
 
 # Don't hate me for being ugly
   if [ $incremental_time == 0 ]; then
@@ -111,9 +130,9 @@ function Incremental_Stats()
 %-${elapsed_text_size}s \
 %-${incremental_time_text_size}s \
 %-${avg_text_size}s \
-%-${compr_text_size}s \
+%-${comp_ratio_text_size}s \
 %-${max_source_size_text}s  \
-%-${max_source_size_text}s \
+%-${max_dest_size_text}s \
 %(%m-%d-%Y %H:%M:%S)T\n" \
     "$TAR_ARCHIVE" \
     "/$archive_volumes" \
@@ -122,7 +141,7 @@ function Incremental_Stats()
     "elapsed..$elapsed_text" \
     "last..$incremental_time_text" \
     "avg..$avg_text" \
-    "compr..$compr_text%" \
+    "compr..$comp_ratio_text%" \
     "source..${source_size_running_text}k" \
     "dest..${dest_size_text}k" \
     "$timestamp"

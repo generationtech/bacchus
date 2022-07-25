@@ -8,22 +8,22 @@ script_dir=$(dirname "$_")/scripts
 source "${script_dir}/include/common/bacchus-parsing.sh" || { echo "Couldn't find 'bacchus-parsing.sh' parsing library in the '$script_dir' directory"; exit 1; }
 # vvv  PLACE YOUR CODE HERE  vvv
 
-export BCS_SOURCE="$_arg_source"
-export BCS_DEST="$_arg_dest"
 export BCS_BASENAME="$_arg_basename"
-export BCS_VOLUMESIZE="$_arg_volumesize"
-export BCS_RAMDISK="$_arg_ramdisk"
-export BCS_TARDIR="$_arg_tardir"
-export BCS_COMPRESDIR="$_arg_compressdir"
 export BCS_COMPRESS="$_arg_compress"
+export BCS_COMPRESDIR="$_arg_compressdir"
 export BCS_DECRYPTDIR="$_arg_decryptdir"
-export BCS_VERBOSETAR="$_arg_verbosetar"
-export BCS_PASSWORD="$password"
-export BCS_LOWDISKSPACE=2
-export BCS_ESTIMATE="$_arg_estimate"
-export BCS_STATISTICS="$_arg_statistics"
-export BCS_RUNSTATISTICS="$_arg_runstatistics"
+export BCS_DEST="$_arg_dest"
 export BCS_ENDSTATISTICS="$_arg_endstatistics"
+export BCS_ESTIMATE="$_arg_estimate"
+export BCS_LOWDISKSPACE=2
+export BCS_PASSWORD="$password"
+export BCS_RAMDISK="$_arg_ramdisk"
+export BCS_RUNSTATISTICS="$_arg_runstatistics"
+export BCS_SOURCE="$_arg_source"
+export BCS_STATISTICS="$_arg_statistics"
+export BCS_TARDIR="$_arg_tardir"
+export BCS_VERBOSETAR="$_arg_verbosetar"
+export BCS_VOLUMESIZE="$_arg_volumesize"
 
 PrintOptions()
 {

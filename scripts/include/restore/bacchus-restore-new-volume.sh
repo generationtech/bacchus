@@ -6,12 +6,18 @@
 #	bacchus-restore-new-volume.sh
 #
 # Utilizes these environment variables:
-#	BCS_SOURCE     - Directory location of archive files
 #	BCS_BASENAME   - Base filename for backup archive
-#	BCS_DECRYPTDIR - Intermediate area to store unencrypted volume
-#	BCS_COMPRESDIR - Intermediate area to store uncompressed volume
 #	BCS_COMPRESS   - Boolean enabling compression
+#	BCS_COMPRESDIR - Intermediate area to store uncompressed volume
+# BCS_DATAFILE
+#	BCS_DECRYPTDIR - Intermediate area to store unencrypted volume
+# BCS_ENDSTATISTICS - Enables showing completion statistics
 # BCS_PASSWORD   - Password to encrypt backup archive volumes
+# BCS_STATISTICS    - Enables showing incremental statistics
+# TAR_ARCHIVE
+# TAR_FD
+# TAR_SUBCOMMAND
+# TAR_VOLUME
 #
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
 #       Bacchus does not unencrypt backup, and operation will fail if
@@ -95,6 +101,7 @@ esac
 
 # Update runtime data to persistence file
 runtime_data=$(jo bcs_source="$bcs_source" \
+                  archive_volumes=$archive_volumes \
                   start_timestamp=$start_timestamp \
                   start_timestamp_running=$start_timestamp_running \
                   incremental_timestamp=$incremental_timestamp \
@@ -102,10 +109,11 @@ runtime_data=$(jo bcs_source="$bcs_source" \
                   remain_text_size_running=$remain_text_size_running \
                   incremental_text_size_running=$incremental_text_size_running \
                   avg_text_size_running=$avg_text_size_running \
-                  compr_text_size_running=$compr_text_size_running \
+                  comp_ratio_text_size_running=$comp_ratio_text_size_running \
+                  source_size_total=$source_size_total \
                   source_size_running="$(( source_size_running + source_actual_size ))" \
                   dest_size_running="$(( dest_size_running + dest_actual_size ))" \
-                  archive_volumes=$archive_volumes )
+                  size_text_running=$size_text_running )
 echo "$runtime_data" > "$BCS_DATAFILE"
 
 exit 0

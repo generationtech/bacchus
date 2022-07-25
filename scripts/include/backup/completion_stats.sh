@@ -1,15 +1,17 @@
+#!/bin/bash
 function Completion_Stats()
 {
   # Compute & output completion statistics
   #
   # Make sure these global variable have values before calling this function
-  # TAR_VOLUME
   # BCS_BASENAME
+  # TAR_VOLUME
   #
-  # start_timestamp
-  # source_size_running
-  # dest_size_running
   # bcs_dest
+  # dest_size_running
+  # source_size_running
+  # start_timestamp
+  # start_timestamp_running
 
   local completion_timestamp
   local completion_time

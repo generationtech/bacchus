@@ -14,17 +14,20 @@
 #	bacchus-restore.sh
 #
 # Utilizes these environment variables:
-#	BCS_SOURCE     - directory location of archive files
-#	BCS_DEST       - directory location of archive files
-#	BCS_BASENAME   - Base filename for backup archive
-#	BCS_VOLUMESIZE - Used LOCALLY here, not from environment
-#	BCS_RAMDISK    - Boolean enabling ramdisk
-#	BCS_TARDIR     - Intermediate area for tar
-#	BCS_DECRYPTDIR - Intermediate area to store unencrypted volume
-#	BCS_COMPRESDIR - Intermediate area to store uncompressed volume
-#	BCS_COMPRESS   - Boolean enabling compression
-# BCS_VERBOSETAR - Tar shows target filenames backed up
-# BCS_PASSWORD   - Password to encrypt backup archive volumes
+#	BCS_BASENAME      - Base filename for backup archive
+#	BCS_COMPRESS      - Boolean enabling compression
+#	BCS_COMPRESDIR    - Intermediate area to store uncompressed volume
+#	BCS_DECRYPTDIR    - Intermediate area to store unencrypted volume
+#	BCS_DEST          - directory location of archive files
+# BCS_ENDSTATISTICS - Enables showing completion statistics
+# BCS_ESTIMATE      - Enables showing estimation info
+# BCS_PASSWORD      - Password to encrypt backup archive volumes
+#	BCS_RAMDISK       - Boolean enabling ramdisk
+#	BCS_SOURCE        - directory location of archive files
+# BCS_STATISTICS    - Enables showing incremental statistics
+#	BCS_TARDIR        - Intermediate area for tar
+# BCS_VERBOSETAR    - Tar shows target filenames backed up
+#	BCS_VOLUMESIZE    - Used LOCALLY here, not from environment
 #
 # NOTE: If no password is supplied (as BCS_PASSWORD environment var),
 #       Bacchus does not unencrypt backup, and operation will fail if
@@ -115,6 +118,7 @@ Process_Volume "$BCS_BASENAME".tar "$BCS_DECRYPTDIR" "$BCS_COMPRESDIR"
 # Populate external data structure with starting values
 export BCS_DATAFILE="$BCS_TMPFILE".runtime
 runtime_data=$(jo bcs_source="$BCS_SOURCE" \
+                  archive_volumes=$total_volumes \
                   start_timestamp=$timestamp \
                   start_timestamp_running=0 \
                   incremental_timestamp=$timestamp \
@@ -122,11 +126,11 @@ runtime_data=$(jo bcs_source="$BCS_SOURCE" \
                   remain_text_size_running=0 \
                   incremental_text_size_running=0 \
                   avg_text_size_running=0 \
-                  compr_text_size_running=0 \
+                  comp_ratio_text_size_running=0 \
                   source_size_total=$source_size_total \
                   source_size_running=$source_actual_size \
                   dest_size_running=$dest_actual_size \
-                  archive_volumes=$total_volumes)
+                  size_text_running=0 )
 echo "$runtime_data" > "$BCS_DATAFILE"
 
 if [ "$BCS_VERBOSETAR" == "on" ]; then

@@ -1,8 +1,9 @@
+#!/bin/bash
 function Duration_Readable()
 {
   # Call this function with one argument
   # $1 - time respresented as total number of seconds
-  
+
   local string_date
   local remainder
   local days

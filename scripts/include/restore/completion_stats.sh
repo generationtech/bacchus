@@ -1,19 +1,21 @@
+#!/bin/bash
 function Completion_Stats()
 {
   # Compute & output completion statistics
   #
   # Make sure these global variable have values before calling this function
-  # start_timestamp
   # archive_volumes
-  # source_size_running
   # dest_size_running
+  # source_size_running
+  # start_timestamp
+  # start_timestamp_running
 
-  local completion_timestamp
-  local completion_time
   local avg_time
-  local source_size_running_text
-  local dest_size_running_text
   local comp_ratio
+  local completion_time
+  local completion_timestamp
+  local dest_size_running_text
+  local source_size_running_text
 
   completion_timestamp=$(date +%s)
   completion_time=$(( completion_timestamp - start_timestamp - start_timestamp_running ))
