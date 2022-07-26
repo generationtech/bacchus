@@ -40,11 +40,14 @@ source "scripts/include/common/duration_readable.sh" || { echo "scripts/include/
 source "scripts/include/common/load_persistence.sh"  || { echo "scripts/include/common/load_persistence.sh not found";  exit 1; }
 source "scripts/include/restore/completion_stats.sh" || { echo "scripts/include/restore/completion_stats.sh not found"; exit 1; }
 source "scripts/include/restore/process_volume.sh"   || { echo "scripts/include/restore/process_volume.sh not found";   exit 1; }
+source "scripts/include/restore/print_estimate.sh"   || { echo "scripts/include/restore/print_estimate.sh not found";   exit 1; }
+source "scripts/include/restore/compute_end.sh"      || { echo "scripts/include/restore/compute_end.sh not found";   exit 1; }
 
 BCS_TMPFILE=$(mktemp -u /tmp/baccus-XXXXXX)
 trap Cleanup EXIT
 
-source=$(find "$BCS_SOURCE" -name "${BCS_BASENAME}".tar* | sort | tail -1)
+bcs_source="$BCS_SOURCE"
+source=$(find "$bcs_source" -name "${BCS_BASENAME}".tar* | sort | tail -1)
 
 if [[ "$source" == *".gz"*  ]]; then
   BCS_COMPRESS="on"
@@ -59,19 +62,9 @@ fi
 # Determine max uncompressed size of individual archive volume
 ramdisk_size_tmpdir="$BCS_TMPFILE".ramdisk_size
 mkdir "$ramdisk_size_tmpdir"
-source="$BCS_SOURCE"/"$BCS_BASENAME".tar
+source="$bcs_source"/"$BCS_BASENAME".tar
 Process_Volume "$BCS_BASENAME".tar "$ramdisk_size_tmpdir" "$ramdisk_size_tmpdir"
 BCS_VOLUMESIZE=$dest_actual_size
-rm -rf "$ramdisk_size_tmpdir"
-
-# Determine uncompressed size of last archive volume
-ramdisk_size_tmpdir="$BCS_TMPFILE".ramdisk_size
-mkdir "$ramdisk_size_tmpdir"
-source=$(find "$BCS_SOURCE" -name "${BCS_BASENAME}".tar* | sort -V | tail -1)
-source="${source//.gpg/}"
-source="${source//.gz/}"
-Process_Volume "$BCS_BASENAME".tar "$ramdisk_size_tmpdir" "$ramdisk_size_tmpdir"
-bcs_volumesize_end=$dest_actual_size
 rm -rf "$ramdisk_size_tmpdir"
 
 # Setup ramdisk if needed
@@ -95,30 +88,36 @@ elif [ "$BCS_RAMDISK" == "on" ]; then
 fi
 
 # Estimate total restore size and number of archive volumes
-total_volumes=$(find "$BCS_SOURCE" -name "${BCS_BASENAME}".tar* | wc -l)
-source_size_total=$(du -sk --apparent-size "$BCS_SOURCE" | awk '{print $1}')
+archive_volumes=$(find "$bcs_source" -name "${BCS_BASENAME}".tar* | wc -l)
+source_size_total=$(du -sk --apparent-size "$bcs_source" | awk '{print $1}')
 
 if [ "$BCS_ESTIMATE" == "on" ]; then
-  printf '\nEstimated number of volumes: %s\n' "$total_volumes"
-  printf "Estimated size of source:    %'.0fk\n" "$source_size_total"
-  total_dest_size=$(( (total_volumes * BCS_VOLUMESIZE) + bcs_volumesize_end ))
-  printf "Estimated size of restore:   %'.0fk\n" "$total_dest_size"
-  comp_ratio=$(( 100 - ( (source_size_total * 100) / total_dest_size) ))
-  printf "Estimated compression ratio: %s%%\n" "$comp_ratio"
+  Compute_End
+  Print_Estimate
 fi
 printf '\n'
 
 # Process first (possibly only) backup volume
-echo "$BCS_BASENAME".tar
+archive_max_name=$(( ${#BCS_BASENAME} + ${#archive_volumes} + 5 ))
+archive_max_num=$(( ${#archive_volumes} + 1 ))
+
+printf "\
+%-${archive_max_name}s \
+%${archive_max_num}s \
+%4s\n"\
+  "${BCS_BASENAME}.tar" \
+  "/$archive_volumes" \
+  "$(( 100 / archive_volumes ))%"
+
 timestamp=$(date +%s)
 
-source="$BCS_SOURCE"/"$BCS_BASENAME".tar
+source="$bcs_source"/"$BCS_BASENAME".tar
 Process_Volume "$BCS_BASENAME".tar "$BCS_DECRYPTDIR" "$BCS_COMPRESDIR"
 
 # Populate external data structure with starting values
 export BCS_DATAFILE="$BCS_TMPFILE".runtime
-runtime_data=$(jo bcs_source="$BCS_SOURCE" \
-                  archive_volumes=$total_volumes \
+runtime_data=$(jo bcs_source="$bcs_source" \
+                  archive_volumes=$archive_volumes \
                   start_timestamp=$timestamp \
                   start_timestamp_running=0 \
                   incremental_timestamp=$timestamp \

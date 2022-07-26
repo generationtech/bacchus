@@ -27,6 +27,8 @@ source "scripts/include/common/duration_readable.sh"  || { echo "scripts/include
 source "scripts/include/common/load_persistence.sh"   || { echo "scripts/include/common/load_persistence.sh not found";   exit 1; }
 source "scripts/include/restore/incremental_stats.sh" || { echo "scripts/include/restore/incremental_stats.sh not found"; exit 1; }
 source "scripts/include/restore/process_volume.sh"    || { echo "scripts/include/restore/process_volume.sh not found";    exit 1; }
+source "scripts/include/restore/print_estimate.sh"    || { echo "scripts/include/restore/print_estimate.sh not found";   exit 1; }
+source "scripts/include/restore/compute_end.sh"       || { echo "scripts/include/restore/compute_end.sh not found";   exit 1; }
 
 # Pull current runtime data from persistence file
 Load_Persistence
@@ -52,8 +54,9 @@ while true; do
     stop_timestamp=$(date +%s)
     printf "\nArchive volume: %s\n" "$(basename "$source")"
     printf "NOT FOUND in:   %s\n" "$bcs_source"
-    printf "Either place this file in the source directory and press enter\n"
-    printf "Or enter a new source path and press enter\n"
+    printf "Either place this file in the source directory,\n"
+    printf "or enter a new source path here.\n"
+    printf "Press enter when ready\n"
     read newpath
     printf "\n"
     if [ -n "$newpath" ]; then
@@ -62,15 +65,23 @@ while true; do
   else
     if [ -n "$newpath" ]; then
       unset newpath
-      resume_timestamp=$(date +%s)
-      start_timestamp_running=$(( start_timestamp_running + (resume_timestamp - stop_timestamp) ))
-      incremental_timestamp_running=$(( incremental_timestamp_running + (resume_timestamp - stop_timestamp) ))
 
       new_source_size=$(du -sk --apparent-size "$bcs_source" | awk '{print $1}')
       source_size_total=$(( source_size_total + new_source_size ))
 
       new_volumes=$(find "$bcs_source" -name "${BCS_BASENAME}".tar* | wc -l)
       archive_volumes=$(( archive_volumes + new_volumes ))
+
+      if [ "$BCS_ESTIMATE" == "on" ]; then
+        printf "ESTIMATE UPDATED"
+        Compute_End
+        Print_Estimate
+        printf '\n'
+      fi
+
+      resume_timestamp=$(date +%s)
+      start_timestamp_running=$(( start_timestamp_running + (resume_timestamp - stop_timestamp) ))
+      incremental_timestamp_running=$(( incremental_timestamp_running + (resume_timestamp - stop_timestamp) ))
     fi
     break
   fi

@@ -60,7 +60,7 @@ function Incremental_Stats()
     incremental_time=$(( timestamp - incremental_timestamp - incremental_timestamp_running ))
 
     if compgen -G "${bcs_dest}/${BCS_BASENAME}*" > /dev/null; then
-      dest_size=$(( dest_size_running + $(du -c "${bcs_dest}/${BCS_BASENAME}"* | tail -1 | awk '{ print $1 }') ))
+      dest_size=$(( dest_size_running + $(du -c --apparent-size "$bcs_dest" | tail -1 | awk '{ print $1 }') ))
     else
       dest_size=$dest_size_running
     fi

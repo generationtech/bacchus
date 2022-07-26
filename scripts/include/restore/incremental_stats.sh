@@ -47,7 +47,7 @@ function Incremental_Stats()
   local source_size_text_length
   local timestamp
 
-  archive_max_name=$(( ${#BCS_BASENAME} + ${#archive_volumes} + 5 ))
+  archive_max_name=$(( ${#BCS_BASENAME} + ${#archive_volumes} + 6 ))
   archive_max_num=$(( ${#archive_volumes} + 1 ))
 
   timestamp=$(date +%s)
@@ -69,15 +69,15 @@ function Incremental_Stats()
   elif [ $dest_size_text_length -gt $size_text_running ]; then
     size_text_running=$dest_size_text_length
   fi
-  max_source_size_text_length=$(( size_text_running + (size_text_running / 3) + 9 ))
-  max_dest_size_text_length=$(( max_source_size_text_length - 1 ))
+  max_source_size_text_length=$(( size_text_running + ( (size_text_running - 1) / 3) + 11 ))
+  max_dest_size_text_length=$(( max_source_size_text_length - 2 ))
 
   remain_text=$(Duration_Readable $remain_time)
   remain_text_size=${#remain_text}
   if [ $remain_text_size -gt $remain_text_size_running ]; then
     remain_text_size_running=$remain_text_size
   fi
-  remain_text_size=$(( remain_text_size_running + 9 ))
+  remain_text_size=$(( remain_text_size_running + 10 ))
 
   elapsed_text=$(Duration_Readable $elapsed_time)
   elapsed_text_size=$(( remain_text_size + 1 ))
@@ -87,34 +87,34 @@ function Incremental_Stats()
   if [ $incremental_time_text_size -gt $incremental_text_size_running ]; then
     incremental_text_size_running=$incremental_time_text_size
   fi
-  incremental_time_text_size=$(( incremental_text_size_running + 7 ))
+  incremental_time_text_size=$(( incremental_text_size_running + 8 ))
 
   avg_text=$(Duration_Readable $avg_time)
   avg_text_size=${#avg_text}
   if [ $avg_text_size -gt $avg_text_size_running ]; then
     avg_text_size_running=$avg_text_size
   fi
-  avg_text_size=$(( avg_text_size_running + 6 ))
+  avg_text_size=$(( avg_text_size_running + 7 ))
 
   comp_ratio_text="$comp_ratio"
   comp_ratio_text_size=${#comp_ratio_text}
   if [ $comp_ratio_text_size -gt $comp_ratio_text_size_running ]; then
     comp_ratio_text_size_running=$comp_ratio_text_size
   fi
-  comp_ratio_text_size=$(( comp_ratio_text_size_running + 9 ))
+  comp_ratio_text_size=$(( comp_ratio_text_size_running + 10 ))
 
 # Don't hate me for being ugly
   printf "\
-%-${archive_max_name}s \
+%-${archive_max_name}s\
 %${archive_max_num}s \
 %4s  \
-%-${remain_text_size}s \
-%-${elapsed_text_size}s \
-%-${incremental_time_text_size}s \
-%-${avg_text_size}s \
-%-${comp_ratio_text_size}s \
-%-${max_source_size_text_length}s  \
-%-${max_dest_size_text_length}s \
+%-${remain_text_size}s\
+%-${elapsed_text_size}s\
+%-${incremental_time_text_size}s\
+%-${avg_text_size}s\
+%-${comp_ratio_text_size}s\
+%-${max_source_size_text_length}s\
+%-${max_dest_size_text_length}s\
 %(%m-%d-%Y %H:%M:%S)T\n" \
     "$filename" \
     "/$archive_volumes" \

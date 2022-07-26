@@ -39,7 +39,7 @@ function Process_Volume()
     fi
 
     if [ -z "$source_actual_size" ]; then
-      source_actual_size=$(stat -c %s "$source".gpg)
+      source_actual_size=$(du -sk --apparent-size "$source".gpg | awk '{print $1}')
     fi
 
     echo "$BCS_PASSWORD" | gpg -qd --batch --cipher-algo AES256 --compress-algo none --passphrase-fd 0 --no-mdc-warning -o "$destination" "$source".gpg
@@ -52,7 +52,7 @@ function Process_Volume()
     #gzip -9cd "$source" > "$destination"
 
     if [ -z "$source_actual_size" ]; then
-      source_actual_size=$(stat -c %s "$source")
+      source_actual_size=$(du -sk --apparent-size "$source" | awk '{print $1}')
     fi
 
     if [ -n "$BCS_PASSWORD" ]; then
@@ -62,10 +62,8 @@ function Process_Volume()
   fi
 
   if [ -z "$source_actual_size" ]; then
-    source_actual_size=$(stat -c %s "$source")
+    source_actual_size=$(du -sk --apparent-size "$source" | awk '{print $1}')
   fi
-  source_actual_size=$(( source_actual_size / 1024 ))
 
-  dest_actual_size=$(stat -c %s "$source")
-  dest_actual_size=$(( dest_actual_size / 1024 ))
+  dest_actual_size=$(du -sk --apparent-size "$source" | awk '{print $1}')
 }

@@ -45,6 +45,7 @@ case "$TAR_SUBCOMMAND" in
 esac
 
 # Ensure sufficient available free space on target for this archive volume
+oldpath=$bcs_dest
 while true; do
   availablespace=$(df -kP "$bcs_dest" | awk '{print $4}' | tail -1)
   lowspace="$(( BCS_VOLUMESIZE * BCS_LOWDISKSPACE ))"
@@ -52,17 +53,20 @@ while true; do
   if [ "$availablespace" -lt "$lowspace" ]; then
     stop_timestamp=$(date +%s)
     printf "\nLOW AVAILABLE SPACE on %s (%sk < %sk)\n" "$bcs_dest" "$(printf "%'.0f" "$availablespace")" "$(printf "%'.0f" "$lowspace")"
-    printf "Either free-up space or swap out storage device and press enter,\n"
-    printf "Or enter a new destination path and press enter\n"
+    printf "Either free-up space, or swap out the storage device,\n"
+    printf "or enter a new destination path here.\n"
+    printf "Press enter when ready\n"
     read -r newpath
     printf "\n"
     if [ -n "$newpath" ]; then
-      dest_size_running=$(( dest_size_running + $(du -c "$bcs_dest"/"$BCS_BASENAME"* | tail -1 | awk '{ print $1 }') ))
       bcs_dest="$newpath"
     fi
   else
     if [ -n "$newpath" ]; then
+      dest_size_running=$(( dest_size_running + $(du -c --apparent-size "$oldpath" | tail -1 | awk '{ print $1 }') ))
+
       unset newpath
+
       resume_timestamp=$(date +%s)
       start_timestamp_running=$(( start_timestamp_running + (resume_timestamp - stop_timestamp) ))
       incremental_timestamp_running=$(( incremental_timestamp_running + (resume_timestamp - stop_timestamp) ))
@@ -81,9 +85,8 @@ fi
 source="$tararchivedir"/"$TAR_ARCHIVE"
 destination="$bcs_dest"/"$TAR_ARCHIVE"
 
-archive_source_size=$(stat -c %s "$source")
-archive_source_size_scaled=$(( archive_source_size / 1024 ))
-source_size_running=$(( source_size_running + archive_source_size_scaled ))
+archive_source_size=$(du -sk --apparent-size "$source" | awk '{print $1}')
+source_size_running=$(( source_size_running + archive_source_size ))
 
 incremental_timestamp=$(date +%s)
 
