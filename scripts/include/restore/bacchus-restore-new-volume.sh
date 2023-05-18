@@ -73,7 +73,7 @@ while true; do
       archive_volumes=$(( archive_volumes + new_volumes ))
 
       if [ "$BCS_ESTIMATE" == "on" ]; then
-        printf "ESTIMATE UPDATED"
+        printf "UPDATING ESTIMATE..."
         Compute_End
         Print_Estimate
         printf '\n'
