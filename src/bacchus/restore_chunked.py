@@ -1,0 +1,192 @@
+"""Manifestless chunked restore: classify each decoded tar segment, dispatch ``tar -x`` or ``tar -xM``."""
+
+from __future__ import annotations
+
+import atexit
+import re
+import subprocess
+import tempfile
+import time
+from pathlib import Path
+
+from bacchus import extern, persistence, ramdisk
+from bacchus.classify import TarSegmentKind, classify_tar_segment
+from bacchus.config import BcsConfig
+from bacchus.pipeline import process_volume_restore
+from bacchus import stats as statsmod
+
+
+def _chunk_member_name(path: Path, basename: str) -> str:
+    m = re.match(rf"^({re.escape(basename)}\.\d{{6}}\.tar)", path.name)
+    if not m:
+        raise ValueError(f"Not a chunked archive file: {path.name}")
+    return m.group(1)
+
+
+def _list_chunks(source: Path, basename: str) -> list[Path]:
+    rx = re.compile(rf"^{re.escape(basename)}\.(\d{{6}})\.tar(?:\.gz)?(?:\.gpg)?$")
+    items: list[tuple[int, Path]] = []
+    for p in source.iterdir():
+        if not p.is_file():
+            continue
+        m = rx.match(p.name)
+        if m:
+            items.append((int(m.group(1)), p))
+    items.sort(key=lambda t: t[0])
+    return [p for _, p in items]
+
+
+def _artifact_path(src_dir: Path, member: str, compress: bool, password: str) -> Path:
+    p = src_dir / member
+    if compress:
+        p = Path(str(p) + ".gz")
+    if password:
+        p = Path(str(p) + ".gpg")
+    return p
+
+
+def _prompt_new_source(expected: Path, current: Path) -> Path:
+    print(f"\nArchive chunk: {expected.name}\nNOT FOUND in:   {current}\n")
+    print("Place the file or enter a new source directory path (empty = retry):\n")
+    np = input().strip()
+    return Path(np) if np else current
+
+
+def run_restore(cfg: BcsConfig) -> None:
+    tmp_prefix = Path(tempfile.mktemp(prefix="baccus-", dir="/tmp"))
+    tmp_runtime = Path(str(tmp_prefix) + ".runtime")
+
+    bcs_source = cfg.source.resolve()
+    all_chunks = _list_chunks(bcs_source, cfg.basename)
+    if not all_chunks:
+        raise SystemExit(f"No chunked archives {cfg.basename}.NNNNNN.tar* in {bcs_source}")
+
+    start = max(1, cfg.start_chunk)
+    paths: list[Path] = []
+    for p in all_chunks:
+        m = re.search(rf"{re.escape(cfg.basename)}\.(\d{{6}})\.tar", p.name)
+        if m and int(m.group(1)) >= start:
+            paths.append(p)
+    if not paths:
+        raise SystemExit(f"No chunks at or after --start-chunk {start}")
+
+    tail = str(paths[-1])
+    compress = ".gz" in tail
+    password = cfg.password if ".gpg" in tail else ""
+
+    rd: ramdisk.Ramdisk | None = None
+    decryptdir = cfg.decryptdir.resolve()
+    compressdir = cfg.compressdir.resolve()
+
+    if cfg.ramdisk and (compress or password):
+        ramdisk_size_tmpdir = Path(str(tmp_prefix) + ".ramdisk_size")
+        ramdisk_size_tmpdir.mkdir()
+        first_member = _chunk_member_name(paths[0], cfg.basename)
+        _, _, vs = process_volume_restore(
+            bcs_source,
+            first_member,
+            ramdisk_size_tmpdir,
+            ramdisk_size_tmpdir,
+            compress=compress,
+            password=password,
+        )
+        subprocess.run(["rm", "-rf", str(ramdisk_size_tmpdir)], check=False)
+        size_b = ramdisk.ramdisk_size_bytes(vs, compress, bool(password))
+        rd_path = Path(str(tmp_prefix) + ".ramdisk")
+        rd = ramdisk.Ramdisk(rd_path, size_b)
+        rd.mount()
+        decryptdir = rd_path
+        compressdir = rd_path
+
+    def cleanup() -> None:
+        ramdisk.cleanup_print()
+        if rd:
+            ramdisk.sync_filesystem()
+            rd.umount()
+        ramdisk.remove_tmp_prefix(tmp_prefix)
+
+    atexit.register(cleanup)
+
+    archive_volumes = len(all_chunks)
+    source_size_total = int(
+        subprocess.check_output(["du", "-sk", "--apparent-size", str(bcs_source)], text=True).split()[0]
+    )
+
+    if cfg.estimate:
+        vs = cfg.volumesize_kb
+        est = max(archive_volumes, source_size_total // max(vs, 1))
+        statsmod.print_estimate(vs, est, source_size_total, vs)
+    print()
+
+    ts = int(time.time())
+    persistence.save(
+        tmp_runtime,
+        persistence.initial_restore_state(
+            bcs_source,
+            archive_volumes,
+            ts,
+            source_size_total,
+            0,
+            0,
+            archive_mode="chunked",
+        ),
+    )
+
+    mv_buf: list[Path] = []
+
+    for p in paths:
+        member = _chunk_member_name(p, cfg.basename)
+        src_dir = bcs_source
+        artifact = _artifact_path(src_dir, member, compress, password)
+        while not artifact.is_file():
+            src_dir = _prompt_new_source(artifact, src_dir)
+            artifact = _artifact_path(src_dir, member, compress, password)
+
+        decoded, src_sz, dst_sz = process_volume_restore(
+            src_dir,
+            member,
+            decryptdir,
+            compressdir,
+            compress=compress,
+            password=password,
+        )
+        kind = classify_tar_segment(decoded)
+
+        if kind == TarSegmentKind.STANDALONE:
+            if mv_buf:
+                raise SystemExit(
+                    "Invalid layout: standalone chunk while a multi-volume group is open. "
+                    "Use an earlier --start-chunk or restore from chunk 1."
+                )
+            extern.tar_extract_single(decoded, cfg.dest.resolve(), cfg.verbosetar)
+            decoded.unlink(missing_ok=True)
+        elif kind == TarSegmentKind.MV_START:
+            if mv_buf:
+                raise SystemExit("Invalid layout: MV_START while a group is already open.")
+            mv_buf.append(decoded)
+        elif kind in (TarSegmentKind.MV_MIDDLE, TarSegmentKind.MV_END):
+            if not mv_buf:
+                raise SystemExit(
+                    "Invalid layout: multi-volume continuation without start. "
+                    "Choose a smaller --start-chunk that begins at MV_START."
+                )
+            mv_buf.append(decoded)
+            if kind == TarSegmentKind.MV_END:
+                extern.tar_extract_multivolume_buffered(mv_buf, cfg.dest.resolve(), cfg.verbosetar)
+                for x in mv_buf:
+                    x.unlink(missing_ok=True)
+                mv_buf.clear()
+        else:
+            raise SystemExit(f"Unknown segment kind: {kind}")
+
+        st = persistence.load(tmp_runtime)
+        st.source_size_running += src_sz
+        st.dest_size_running += dst_sz
+        persistence.save(tmp_runtime, st)
+
+    if mv_buf:
+        raise SystemExit("Truncated multi-volume group at end of backup.")
+
+    if cfg.statistics and cfg.endstatistics:
+        st = persistence.load(tmp_runtime)
+        statsmod.completion_stats_restore(st, len(paths), cfg.dest.resolve())

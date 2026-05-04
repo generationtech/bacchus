@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Repo-root convenience launcher (sets PYTHONPATH to ./src).
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export PYTHONPATH="$DIR/src${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m bacchus "$@"

@@ -1,27 +1,67 @@
 # BACCHUS
 
-Creates multi-volume backups, first compressing and then encrypting.
-Allows for creating smaller backups with privacy while allowing
-for partial recovery should any individual incremental archive
-file be damaged.
+Creates multi-volume backups, optionally compressing (**pigz**) and encrypting (**gpg**) **each volume or chunk separately**. Chunked mode (default) writes **self-contained tar chunks** plus optional **Tier-3 GNU tar multi-volume “mini” runs** for single members larger than an absolute cap. Legacy mode preserves the original **single `tar -cM` stream** layout for compatibility with older backups.
 
-Other similar solutions using incremental files, compression, and
-encryption result in total data loss past failed incremental archive file.
+## Requirements
 
-## Help
+- Python **3.9+**
+- **GNU tar**, **pigz** (optional if compression disabled), **gpg** (optional if encryption disabled)
+- For **legacy ramdisk** or **chunked ramdisk**: ability to `mount` **tmpfs** (typically root)
 
-Access program command line options with
+## Install (development)
 
-    bacchus --help
+```bash
+pip install -e .
+# or without install:
+./bacchus --help
+# equivalent:
+PYTHONPATH=src python3 -m bacchus --help
+```
 
-## Building
+The `bacchus` console script is registered when installing the package (`pip install -e .`).
 
-argbash located outside of repo dir was used for building the command line argument parsing
+## Usage
 
-script built with
+```bash
+bacchus --help
+bacchus backup --help
+bacchus restore --help
+```
 
-    ../argbash/bin/argbash source/bacchus.m4 -o bacchus.sh
+### Archive modes
 
-then parser script built with
+- **`chunked` (default for backup)**  
+  Chunks are named `basename.NNNNNN.tar` (optional `.gz`, `.gpg`). Restore detects standalone vs multi-volume slices by inspecting tar bytes (no manifest).
 
-    ../argbash/bin/argbash --strip user-content "source/bacchus-parsing.m4" -o "scripts/bacchus-parsing.sh"
+- **`legacy`**  
+  Same on-disk layout as Bacchus 1.x: `basename.tar`, `basename.tar-2`, …
+
+On **restore**, if `--archive-mode` is omitted, Bacchus infers the mode from filenames. If both layouts are present, pass `--archive-mode` explicitly.
+
+### Notable new flags
+
+| Flag | Meaning |
+|------|---------|
+| `--archive-mode chunked\|legacy` | Backup/restore driver |
+| `--absolute-max-size kB` | Chunked backup: max single chunk before Tier-3 mini `tar -cM` (default: `8 × --volumesize`) |
+| `--mini-slice-size kB` | Chunked backup: `-L` for inner `tar -cM` (default: `--volumesize`) |
+| `--start-chunk N` | Chunked restore: begin at chunk index `N` (1-based) |
+
+### Legacy shell implementation
+
+The original bash + argbash sources live under [`legacy/`](legacy/) for reference or emergency use:
+
+- `legacy/bacchus.sh`
+- `legacy/scripts/`
+- `legacy/source/`
+
+## Tests
+
+```bash
+pip install -e '.[dev]'
+PYTHONPATH=src python3 -m pytest tests/ -q
+```
+
+## License
+
+GPL-3.0-or-later (see [LICENSE](LICENSE)).
