@@ -62,6 +62,23 @@ pip install -e '.[dev]'
 PYTHONPATH=src python3 -m pytest tests/ -q
 ```
 
+### Full E2E (chunked + Tier‑3 + restore verify)
+
+`tests/test_e2e_full.py` runs a **~500 MiB** random tree through real `python -m bacchus` backup/restore whenever you run `pytest`. To skip it during inner loops:
+
+```bash
+export BACCHUS_SKIP_E2E=1
+PYTHONPATH=src python3 -m pytest tests/ -q
+```
+
+Run the same flow from the CLI (writes under `$TMPDIR` by default):
+
+```bash
+PYTHONPATH=src python3 -m tests.integration.run_e2e --help
+```
+
+On failure, the implementation prints paths to the source tree, backup chunks, and restore output under the workdir and leaves them in place for inspection.
+
 ## License
 
 GPL-3.0-or-later (see [LICENSE](LICENSE)).
