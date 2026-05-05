@@ -13,7 +13,7 @@ from pathlib import Path
 
 from bacchus import extern, persistence, ramdisk
 from bacchus.config import BcsConfig
-from bacchus.pipeline import ship_raw_tar
+from bacchus.pipeline import du_sk_apparent, ship_raw_tar
 from bacchus.walk import iter_files_with_sizes
 
 
@@ -21,8 +21,37 @@ def _predict_after_add(current_raw_bytes: int, file_size: int) -> int:
     return current_raw_bytes + 512 + ((file_size + 511) // 512) * 512
 
 
+def _mini_tar_volume(name: str) -> int | None:
+    """Map ``mini.tar`` / ``mini.tar-N`` basename to a monotonic volume index (1-based)."""
+    if name == "mini.tar":
+        return 1
+    prefix = "mini.tar-"
+    if name.startswith(prefix) and name[len(prefix) :].isdigit():
+        return int(name[len(prefix) :])
+    return None
+
+
+def _last_mini_tar_slice(tardir: Path) -> Path | None:
+    """
+    After ``tar -cM`` returns, ``--volno-file`` can read **ahead** of the last real slice name.
+    The new-volume hook has already shipped every completed slice; only the final ``mini.tar*``
+    remains. Discover it by scanning the directory instead of deriving the name from ``volno``.
+    """
+    best: tuple[int, Path] | None = None
+    for p in tardir.glob("mini.tar*"):
+        if not p.is_file():
+            continue
+        v = _mini_tar_volume(p.name)
+        if v is None:
+            continue
+        if best is None or v > best[0]:
+            best = (v, p)
+    return None if best is None else best[1]
+
+
 def _tier3(
-    member_abs: Path,
+    member_rel: str,
+    tar_cwd: Path,
     cfg: BcsConfig,
     tardir: Path,
     compressdir: Path,
@@ -54,7 +83,8 @@ def _tier3(
 
     env = {"BCS_DATAFILE": str(datafile), "BCS_TIER3_STATE": str(tier3_state)}
     extern.tar_create_multivolume_single_member(
-        member_abs.resolve(),
+        tar_cwd.resolve(),
+        member_rel,
         mini_first,
         cfg.resolved_mini_slice_kb(),
         tardir,
@@ -64,26 +94,27 @@ def _tier3(
         env=env,
     )
 
-    vol = int(volno.read_text().strip())
-    last_base = "mini.tar" if vol == 1 else f"mini.tar-{vol}"
-    last_raw = tardir / last_base
-    if last_raw.is_file():
+    last_raw = _last_mini_tar_slice(tardir)
+    if last_raw is not None and last_raw.is_file():
         st = json.loads(tier3_state.read_text(encoding="utf-8"))
         seq = int(st["chunk_seq"])
         member = f"{cfg.basename}.{seq:06d}.tar"
+        # Size before ship: ``ship_raw_tar`` moves ``last_raw`` out of ``tardir`` (often ``replace``).
+        extra_kb = du_sk_apparent(last_raw)
         ship_raw_tar(last_raw, dest, member, compress=cfg.compress, password=cfg.password, compressdir=compressdir)
         rt = persistence.load(datafile)
-        rt.source_size_running += int(
-            subprocess.check_output(["du", "-sk", "--apparent-size", str(last_raw)], text=True).split()[0]
-        )
+        rt.source_size_running += extra_kb
         st["chunk_seq"] = seq + 1
         tier3_state.write_text(json.dumps(st), encoding="utf-8")
         persistence.save(datafile, rt)
         last_raw.unlink(missing_ok=True)
         chunk_index = int(st["chunk_seq"])
     else:
-        st = json.loads(tier3_state.read_text(encoding="utf-8"))
-        chunk_index = int(st["chunk_seq"])
+        vol_hint = volno.read_text(encoding="utf-8").strip()
+        raise RuntimeError(
+            f"Tier-3: inner tar finished but no remaining mini.tar* slice under {tardir} "
+            f"(expected final slice before ship; --volno-file last read {vol_hint!r})."
+        )
 
     for p in tardir.glob("mini.tar*"):
         p.unlink(missing_ok=True)
@@ -183,7 +214,7 @@ def run_backup(cfg: BcsConfig) -> None:
     for path, file_size in iter_files_with_sizes(source_root):
         if file_size > absolute:
             flush()
-            chunk_index = _tier3(path, cfg, tardir, compressdir, dest, tmp_runtime, tmp_prefix, chunk_index)
+            chunk_index = _tier3(rel(path), parent, cfg, tardir, compressdir, dest, tmp_runtime, tmp_prefix, chunk_index)
             continue
 
         if current_tar is None:

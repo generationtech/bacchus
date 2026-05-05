@@ -162,7 +162,8 @@ def tar_create_file_archive(
 
 
 def tar_create_multivolume_single_member(
-    member_abs: Path,
+    cwd: Path,
+    path_relative_to_cwd: str,
     out_first: Path,
     slice_kb: int,
     tardir: Path,
@@ -171,17 +172,16 @@ def tar_create_multivolume_single_member(
     verbose: bool,
     env: dict | None = None,
 ) -> None:
-    """Inner tar -cM over a single file (Tier 3)."""
+    """Inner ``tar -cM`` for one archive member, same ``-C``/relative path rules as ``tar_create_file_archive``."""
     tardir.mkdir(parents=True, exist_ok=True)
-    parent = member_abs.parent
-    name = member_abs.name
     args = ["tar"]
     if verbose:
         args += ["-cpMv"]
     else:
         args += ["-cpM"]
     args += [
-        "--format=posix",
+        # Omit ``--format=posix`` so GNU multi-volume uses typeflag ``M`` continuations; POSIX
+        # inner volumes classify as consecutive ``MV_START`` and break manifestless restore.
         "--new-volume-script",
         str(new_volume_script),
         "-L",
@@ -191,8 +191,8 @@ def tar_create_multivolume_single_member(
         "-f",
         str(out_first),
         "-C",
-        str(parent),
-        name,
+        str(cwd),
+        path_relative_to_cwd,
     ]
     run_check(args, env=env)
 

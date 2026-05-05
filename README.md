@@ -64,12 +64,7 @@ PYTHONPATH=src python3 -m pytest tests/ -q
 
 ### Full E2E (chunked + Tier‑3 + restore verify)
 
-`tests/test_e2e_full.py` runs a **~500 MiB** random tree through real `python -m bacchus` backup/restore whenever you run `pytest`. To skip it during inner loops:
-
-```bash
-export BACCHUS_SKIP_E2E=1
-PYTHONPATH=src python3 -m pytest tests/ -q
-```
+`tests/test_e2e_full.py` always runs a **~500 MiB** random tree through real `python -m bacchus` backup/restore when you run `pytest`. For a smaller manual run, use `--total-bytes` on the CLI (see below).
 
 Run the same flow from the CLI (writes under `$TMPDIR` by default):
 

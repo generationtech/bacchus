@@ -231,13 +231,14 @@ def assert_tier3_mv_continuation_present(
     compress: bool,
     password: str,
 ) -> None:
-    """At least one decoded chunk must be GNU multivolume continuation (typeflag ``M``)."""
+    """At least one decoded chunk must be a GNU inner multi-volume continuation (typeflag ``M``)."""
     TarSegmentKind, classify_tar_segment, process_volume_restore = _bacchus_imports()
 
     rx_member = re.compile(rf"^({re.escape(basename)}\.\d{{6}}\.tar)")
     tmp = workdir / "_e2e_decode"
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
+    tmp_resolved = tmp.resolve()
 
     found_mv = False
     for art in _list_chunk_artifacts(dest, basename):
@@ -254,7 +255,13 @@ def assert_tier3_mv_continuation_present(
             password=password,
         )
         kind = classify_tar_segment(plain)
-        plain.unlink(missing_ok=True)
+        # ``plain`` may be the real artifact under ``dest``; only remove intermediates under ``tmp``.
+        try:
+            plain.resolve().relative_to(tmp_resolved)
+        except ValueError:
+            pass
+        else:
+            plain.unlink(missing_ok=True)
         if kind in (TarSegmentKind.MV_MIDDLE, TarSegmentKind.MV_END):
             found_mv = True
             break
