@@ -47,6 +47,16 @@ On **restore**, if `--archive-mode` is omitted, Bacchus infers the mode from fil
 | `--mini-slice-size kB` | Chunked backup: `-L` for inner `tar -cM` (default: `--volumesize`) |
 | `--start-chunk N` | Chunked restore: begin at chunk index `N` (1-based) |
 
+### Chunked progress (bash-style per “volume”)
+
+Chunked backup and restore print **one line per shipped chunk** (`basename.NNNNNN.tar`), similar to the legacy bash per-volume log:
+
+- **`-S on` (default), `-W off`:** print the chunk filename only after each chunk.
+- **`-S on`, `-W on` (default):** print the full incremental statistics line (remain / elapsed / compression / sizes / timestamp), matching the legacy `volume_hook` layout.
+- **`-S off`:** suppress those per-chunk lines (and chunked completion summary that depends on `-X`; use **`-X off`** to silence the “OPERATION COMPLETE” block as well).
+
+Tier‑3 inner `tar -cM` slices are logged the same way (hook + final ship), so output stays consistent whether or not Tier‑3 ran.
+
 ### Legacy shell implementation
 
 The original bash + argbash sources live under [`legacy/`](legacy/) for reference or emergency use:

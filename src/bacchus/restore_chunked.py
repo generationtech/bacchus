@@ -134,7 +134,7 @@ def run_restore(cfg: BcsConfig) -> None:
 
     mv_buf: list[Path] = []
 
-    for p in paths:
+    for vol_idx, p in enumerate(paths, start=1):
         member = _chunk_member_name(p, cfg.basename)
         src_dir = bcs_source
         artifact = _artifact_path(src_dir, member, compress, password)
@@ -183,6 +183,12 @@ def run_restore(cfg: BcsConfig) -> None:
         st.source_size_running += src_sz
         st.dest_size_running += dst_sz
         persistence.save(tmp_runtime, st)
+
+        if cfg.statistics:
+            if cfg.runstatistics:
+                statsmod.incremental_stats_restore(cfg.basename, st, member, vol_idx)
+            else:
+                print(member)
 
     if mv_buf:
         raise SystemExit("Truncated multi-volume group at end of backup.")

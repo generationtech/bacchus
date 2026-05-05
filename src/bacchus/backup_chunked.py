@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from bacchus import extern, persistence, ramdisk
+from bacchus import stats as statsmod
 from bacchus.config import BcsConfig
 from bacchus.pipeline import du_sk_apparent, ship_raw_tar
 from bacchus.walk import iter_files_with_sizes
@@ -49,6 +50,17 @@ def _last_mini_tar_slice(tardir: Path) -> Path | None:
     return None if best is None else best[1]
 
 
+def _emit_chunked_ship_progress(cfg: BcsConfig, datafile: Path, member: str, chunk_vol: int) -> None:
+    """Per-chunk line when ``-S on``; full incremental when ``-S on -W on`` (legacy-style)."""
+    if not cfg.statistics:
+        return
+    state = persistence.load(datafile)
+    if cfg.runstatistics:
+        statsmod.incremental_stats_backup(cfg.basename, state, member, chunk_vol)
+    else:
+        print(member)
+
+
 def _tier3(
     member_rel: str,
     tar_cwd: Path,
@@ -70,6 +82,8 @@ def _tier3(
                 "compress": cfg.compress,
                 "password": cfg.password,
                 "compressdir": str(compressdir),
+                "statistics": cfg.statistics,
+                "runstatistics": cfg.runstatistics,
             }
         ),
         encoding="utf-8",
@@ -107,6 +121,7 @@ def _tier3(
         st["chunk_seq"] = seq + 1
         tier3_state.write_text(json.dumps(st), encoding="utf-8")
         persistence.save(datafile, rt)
+        _emit_chunked_ship_progress(cfg, datafile, member, seq)
         last_raw.unlink(missing_ok=True)
         chunk_index = int(st["chunk_seq"])
     else:
@@ -192,6 +207,7 @@ def run_backup(cfg: BcsConfig) -> None:
         ship_raw_tar(current_tar, dest, member, compress=cfg.compress, password=cfg.password, compressdir=compressdir)
         state.incremental_timestamp = int(time.time())
         persistence.save(tmp_runtime, state)
+        _emit_chunked_ship_progress(cfg, tmp_runtime, member, chunk_index)
         current_tar.unlink(missing_ok=True)
         chunk_index += 1
         current_tar = None
@@ -230,3 +246,6 @@ def run_backup(cfg: BcsConfig) -> None:
         append_to_chunk(path)
 
     flush()
+    if chunk_index > 1 and cfg.statistics and cfg.endstatistics:
+        st = persistence.load(tmp_runtime)
+        statsmod.completion_stats_backup(st, chunk_index)

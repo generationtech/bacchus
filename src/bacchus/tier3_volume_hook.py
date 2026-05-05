@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from bacchus import persistence
+from bacchus import persistence, stats as statsmod
 from bacchus.pipeline import du_sk_apparent, ship_raw_tar
 
 
@@ -49,6 +49,12 @@ def main() -> None:
     rt.incremental_timestamp = int(time.time())
     rt.incremental_timestamp_running = 0
     persistence.save(datafile, rt)
+
+    if st.get("statistics"):
+        if st.get("runstatistics"):
+            statsmod.incremental_stats_backup(basename, rt, member, chunk_seq)
+        else:
+            print(member)
 
     if tar_fd == "none":
         sys.exit(0)
