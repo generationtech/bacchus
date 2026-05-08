@@ -34,11 +34,8 @@ def iter_source_paths_tar_order(source: Path) -> List[Path]:
         paths.append(root)
 
     def sort_key(p: Path) -> str:
-        try:
-            rel = p.resolve().relative_to(parent)
-        except ValueError:
-            rel = p.resolve()
-        return rel.as_posix()
+        # Match archive member names: logical path under parent (do not resolve symlink targets).
+        return p.relative_to(parent).as_posix()
 
     paths.sort(key=sort_key)
     return paths

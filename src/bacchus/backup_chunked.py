@@ -191,7 +191,8 @@ def run_backup(cfg: BcsConfig) -> None:
     current_raw = 0
 
     def rel(p: Path) -> str:
-        return str(p.resolve().relative_to(parent))
+        # Logical path under parent (do not resolve symlinks — targets may be outside the tree).
+        return p.relative_to(parent).as_posix()
 
     def flush() -> None:
         nonlocal chunk_index, current_tar, current_raw

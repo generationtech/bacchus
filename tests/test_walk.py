@@ -13,7 +13,7 @@ def test_walk_order(tmp_path: Path) -> None:
     (root / "a" / "a.txt").write_text("a")
     (root / "b" / "m.txt").write_text("m")
     paths = iter_source_paths_tar_order(root)
-    keys = [p.resolve().relative_to(tmp_path).as_posix() for p in paths]
+    keys = [p.relative_to(tmp_path).as_posix() for p in paths]
     assert keys[0] == "src"
     assert keys[1:] == ["src/a", "src/a/a.txt", "src/a/z.txt", "src/b", "src/b/m.txt"]
 
