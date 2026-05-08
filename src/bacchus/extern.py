@@ -19,6 +19,31 @@ def run_check(cmd: Sequence[str], env: dict | None = None, **kwargs) -> subproce
     return subprocess.run(cmd, check=True, env=merged, **kwargs)
 
 
+def _paths_to_null_delimited_bytes(paths_relative_to_cwd: List[str]) -> bytes:
+    """NUL-separated member names for GNU ``tar --null -T`` (safe for newlines in paths)."""
+    if not paths_relative_to_cwd:
+        return b""
+    return b"\0".join(os.fsencode(p) for p in paths_relative_to_cwd) + b"\0"
+
+
+def _run_tar_with_files_from(cmd_prefix: List[str], paths_relative_to_cwd: List[str], list_dir: Path) -> None:
+    """
+    Run tar with member paths read from a temp file (avoids ``ARG_MAX`` / argv limits).
+
+    ``cmd_prefix`` must end with ``--null`` and ``-T``; the list file path is appended.
+    """
+    if not paths_relative_to_cwd:
+        return
+    list_dir.mkdir(parents=True, exist_ok=True)
+    payload = _paths_to_null_delimited_bytes(paths_relative_to_cwd)
+    list_path = list_dir / f".bacchus-tar-list-{os.getpid()}-{os.urandom(4).hex()}.lst"
+    try:
+        list_path.write_bytes(payload)
+        run_check(cmd_prefix + [str(list_path)])
+    finally:
+        list_path.unlink(missing_ok=True)
+
+
 def tar_multivolume_create(
     source_dir: Path,
     tar_dir: Path,
@@ -150,15 +175,18 @@ def tar_create_file_archive(
     verbose: bool,
 ) -> None:
     """Create or append ustar members; paths are relative to cwd."""
+    if not paths_relative_to_cwd:
+        return
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     use_append = append and archive_path.exists() and archive_path.stat().st_size > 0
-    args: List[str] = ["tar", "--format=posix"]
+    verb: List[str] = ["-v"] if verbose else []
     if use_append:
-        args += ["-r"] + (["-v"] if verbose else []) + ["-f", str(archive_path), "-C", str(cwd)]
+        prefix: List[str] = (
+            ["tar", "--format=posix", "-r"] + verb + ["-f", str(archive_path), "-C", str(cwd), "--null", "-T"]
+        )
     else:
-        args += ["-c"] + (["-v"] if verbose else []) + ["-f", str(archive_path), "-C", str(cwd)]
-    args += paths_relative_to_cwd
-    run_check(args)
+        prefix = ["tar", "--format=posix", "-c"] + verb + ["-f", str(archive_path), "-C", str(cwd), "--null", "-T"]
+    _run_tar_with_files_from(prefix, paths_relative_to_cwd, archive_path.parent)
 
 
 def tar_create_archive(
@@ -171,14 +199,10 @@ def tar_create_archive(
     if not paths_relative_to_cwd:
         return
     archive_path.parent.mkdir(parents=True, exist_ok=True)
-    args: List[str] = ["tar", "--format=posix", "-c"] + (["-v"] if verbose else []) + [
-        "-f",
-        str(archive_path),
-        "-C",
-        str(cwd),
-    ]
-    args += paths_relative_to_cwd
-    run_check(args)
+    prefix: List[str] = (
+        ["tar", "--format=posix", "-c"] + (["-v"] if verbose else []) + ["-f", str(archive_path), "-C", str(cwd), "--null", "-T"]
+    )
+    _run_tar_with_files_from(prefix, paths_relative_to_cwd, archive_path.parent)
 
 
 def tar_create_multivolume_single_member(
