@@ -27,6 +27,8 @@ class RuntimeState:
     source_size_running: int = 0
     dest_size_running: int = 0
     size_text_running: int = 0
+    stats_line_source_seg_w: int = 0
+    stats_line_dest_seg_w: int = 0
     archive_mode: str = "chunked"
     chunk_index: int = 0
     mv_group_open: bool = False

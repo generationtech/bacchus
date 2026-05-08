@@ -57,6 +57,7 @@ def _emit_chunked_ship_progress(cfg: BcsConfig, datafile: Path, member: str, chu
     state = persistence.load(datafile)
     if cfg.runstatistics:
         statsmod.incremental_stats_backup(cfg.basename, state, member, chunk_vol)
+        persistence.save(datafile, state)
     else:
         print(member)
 

@@ -48,13 +48,14 @@ def main() -> None:
     state_path.write_text(json.dumps(st), encoding="utf-8")
     rt.incremental_timestamp = int(time.time())
     rt.incremental_timestamp_running = 0
-    persistence.save(datafile, rt)
 
     if st.get("statistics"):
         if st.get("runstatistics"):
             statsmod.incremental_stats_backup(basename, rt, member, chunk_seq)
         else:
             print(member)
+
+    persistence.save(datafile, rt)
 
     if tar_fd == "none":
         sys.exit(0)

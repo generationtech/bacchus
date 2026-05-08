@@ -72,17 +72,45 @@ def incremental_stats_backup(
         )
         dest_size += int(du.stdout.strip().splitlines()[-1].split()[0])
     comp_ratio = 100 - ((dest_size * 100) // state.source_size_running) if state.source_size_running else 0
-    print(
+    # Dynamic column widths (legacy bash incremental_stats): running maxima keep columns aligned.
+    rem_txt = duration_readable(remain_time)
+    state.remain_text_size_running = max(state.remain_text_size_running, len(rem_txt))
+    remain_w = state.remain_text_size_running + 10
+
+    el_txt = duration_readable(elapsed_time)
+    elapsed_w = remain_w + 1
+
+    inc_txt = duration_readable(incremental_time)
+    state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
+    last_w = state.incremental_text_size_running + 8
+
+    avg_txt = duration_readable(avg_time)
+    state.avg_text_size_running = max(state.avg_text_size_running, len(avg_txt))
+    avg_w = state.avg_text_size_running + 7
+
+    cr_txt = str(comp_ratio)
+    state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_txt))
+    compr_w = state.comp_ratio_text_size_running + 10
+
+    src_fmt = _fmt_int(state.source_size_running)
+    dst_fmt = _fmt_int(dest_size)
+    src_seg = f"source..{src_fmt}k"
+    dst_seg = f"dest..{dst_fmt}k"
+    state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
+    state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
+
+    line = (
         f"{tar_archive:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} {pct:4d}%  "
-        f"remain..{duration_readable(remain_time):<10s} "
-        f"elapsed..{duration_readable(elapsed_time):<12s} "
-        f"last..{duration_readable(incremental_time):<8s} "
-        f"avg..{duration_readable(avg_time):<7s} "
-        f"compr..{comp_ratio:<4d}% "
-        f"source..{_fmt_int(state.source_size_running):>11s}k "
-        f"dest..{_fmt_int(dest_size):>9s}k "
+        f"{'remain..' + rem_txt:<{remain_w}s}"
+        f"{'elapsed..' + el_txt:<{elapsed_w}s}"
+        f"{'last..' + inc_txt:<{last_w}s}"
+        f"{'avg..' + avg_txt:<{avg_w}s}"
+        f"{'compr..' + cr_txt + '%':<{compr_w}s}"
+        f"{src_seg:<{state.stats_line_source_seg_w}s}"
+        f"{dst_seg:<{state.stats_line_dest_seg_w}s}"
         f"{time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(timestamp))}"
     )
+    print(line)
 
 
 def incremental_stats_restore(
@@ -103,17 +131,45 @@ def incremental_stats_restore(
         100 - ((state.source_size_running * 100) // state.dest_size_running) if state.dest_size_running else 0
     )
     pct = (tar_volume * 100) // archive_volumes if archive_volumes else 0
-    print(
+
+    rem_txt = duration_readable(remain_time)
+    state.remain_text_size_running = max(state.remain_text_size_running, len(rem_txt))
+    remain_w = state.remain_text_size_running + 10
+
+    el_txt = duration_readable(elapsed_time)
+    elapsed_w = remain_w + 1
+
+    inc_txt = duration_readable(incremental_time)
+    state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
+    last_w = state.incremental_text_size_running + 8
+
+    avg_txt = duration_readable(avg_time)
+    state.avg_text_size_running = max(state.avg_text_size_running, len(avg_txt))
+    avg_w = state.avg_text_size_running + 7
+
+    cr_txt = str(comp_ratio)
+    state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_txt))
+    compr_w = state.comp_ratio_text_size_running + 10
+
+    src_fmt = _fmt_int(state.source_size_running)
+    dst_fmt = _fmt_int(state.dest_size_running)
+    src_seg = f"source..{src_fmt}k"
+    dst_seg = f"dest..{dst_fmt}k"
+    state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
+    state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
+
+    line = (
         f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} {pct:4d}%  "
-        f"remain..{duration_readable(remain_time):<10s} "
-        f"elapsed..{duration_readable(elapsed_time):<12s} "
-        f"last..{duration_readable(incremental_time):<8s} "
-        f"avg..{duration_readable(avg_time):<7s} "
-        f"compr..{comp_ratio:<4d}% "
-        f"source..{_fmt_int(state.source_size_running):>11s}k "
-        f"dest..{_fmt_int(state.dest_size_running):>9s}k "
+        f"{'remain..' + rem_txt:<{remain_w}s}"
+        f"{'elapsed..' + el_txt:<{elapsed_w}s}"
+        f"{'last..' + inc_txt:<{last_w}s}"
+        f"{'avg..' + avg_txt:<{avg_w}s}"
+        f"{'compr..' + cr_txt + '%':<{compr_w}s}"
+        f"{src_seg:<{state.stats_line_source_seg_w}s}"
+        f"{dst_seg:<{state.stats_line_dest_seg_w}s}"
         f"{time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(timestamp))}"
     )
+    print(line)
 
 
 def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) -> None:
