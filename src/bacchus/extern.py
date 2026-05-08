@@ -109,7 +109,19 @@ def tar_multivolume_extract(
 def pigz_compress(src: Path, dst_gz: Path) -> None:
     dst_gz.parent.mkdir(parents=True, exist_ok=True)
     with open(src, "rb") as inf, open(dst_gz, "wb") as outf:
-        run_check(["pigz", "-9c"], stdin=inf, stdout=outf)
+        r = subprocess.run(["pigz", "-9c"], stdin=inf, stdout=outf, stderr=subprocess.PIPE)
+    if r.returncode != 0:
+        err = (r.stderr or b"").decode("utf-8", errors="replace").strip()
+        msg = f"pigz failed with exit status {r.returncode}"
+        if err:
+            msg += f": {err}"
+        if "No space left on device" in err or r.returncode == 28:
+            msg += (
+                " (no space on the filesystem holding intermediates—often tmpfs when "
+                "`-r on`; destination `-d` free space does not apply to the ramdisk. "
+                "Try `-r off`, a smaller `-v`, or more RAM.)"
+            )
+        raise RuntimeError(msg)
 
 
 def pigz_decompress(src_gz: Path, dst: Path) -> None:

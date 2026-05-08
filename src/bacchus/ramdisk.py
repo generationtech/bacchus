@@ -40,12 +40,21 @@ class Ramdisk:
 
 
 def ramdisk_size_bytes(volumesize_kb: int, compress: bool, encrypt: bool) -> int:
-    """Match bash: ramdisk_size = sum(volume) * 1024 + 1% of volume in bytes."""
+    """
+    tmpfs size for tar/compress staging.
+
+    Legacy bash used one ``volumesize`` slab per enabled stage (compress / encrypt) plus 1% slack.
+    When **both** are on, ``pigz`` keeps the raw ``.tar`` and growing ``.gz`` on the same filesystem
+    until compression finishes, and the raw tar can slightly exceed the nominal ``-v`` target—so we
+    add an extra overlap margin (25% of one volume) to avoid ENOSPC on large ``-v`` runs.
+    """
     ramdisk_kb = 0
     if compress:
         ramdisk_kb += volumesize_kb
     if encrypt:
         ramdisk_kb += volumesize_kb
+    if compress and encrypt:
+        ramdisk_kb += volumesize_kb // 4
     return (ramdisk_kb * 1024) + ((volumesize_kb * 1024) // 100)
 
 
