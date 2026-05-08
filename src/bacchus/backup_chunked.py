@@ -123,6 +123,10 @@ def _tier3(
         tier3_state.write_text(json.dumps(st), encoding="utf-8")
         persistence.save(datafile, rt)
         _emit_chunked_ship_progress(cfg, datafile, member, seq)
+        rt = persistence.load(datafile)
+        rt.incremental_timestamp = int(time.time())
+        rt.incremental_timestamp_running = 0
+        persistence.save(datafile, rt)
         last_raw.unlink(missing_ok=True)
         chunk_index = int(st["chunk_seq"])
     else:
@@ -207,9 +211,12 @@ def run_backup(cfg: BcsConfig) -> None:
         )
         member = f"{cfg.basename}.{chunk_index:06d}.tar"
         ship_raw_tar(current_tar, dest, member, compress=cfg.compress, password=cfg.password, compressdir=compressdir)
-        state.incremental_timestamp = int(time.time())
         persistence.save(tmp_runtime, state)
         _emit_chunked_ship_progress(cfg, tmp_runtime, member, chunk_index)
+        state = persistence.load(tmp_runtime)
+        state.incremental_timestamp = int(time.time())
+        state.incremental_timestamp_running = 0
+        persistence.save(tmp_runtime, state)
         current_tar.unlink(missing_ok=True)
         chunk_index += 1
         current_tar = None

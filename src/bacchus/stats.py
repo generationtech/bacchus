@@ -53,13 +53,21 @@ def incremental_stats_backup(
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
     pct = ((tar_volume - 1) * 100) // archive_volumes if archive_volumes else 0
-    if state.source_size_running == 0 or tar_volume <= 2:
+    # Legacy tar -cM skips full stats for the first two volumes; chunked mode prints full lines from chunk 1.
+    short_line = state.source_size_running == 0 or (
+        tar_volume <= 2 and state.archive_mode != "chunked"
+    )
+    if short_line:
         print(
             f"{tar_archive:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} {pct:4d}%"
         )
         return
-    avg_time = elapsed_time // (tar_volume - 2) if tar_volume > 2 else 0
-    remain_time = avg_time * (archive_volumes - tar_volume + 2) if archive_volumes else 0
+    if state.archive_mode == "chunked" and tar_volume <= 2:
+        avg_time = elapsed_time // tar_volume if tar_volume > 0 else 0
+        remain_time = avg_time * max(0, archive_volumes - tar_volume) if archive_volumes else 0
+    else:
+        avg_time = elapsed_time // (tar_volume - 2) if tar_volume > 2 else 0
+        remain_time = avg_time * (archive_volumes - tar_volume + 2) if archive_volumes else 0
     incremental_time = timestamp - state.incremental_timestamp - state.incremental_timestamp_running
     bcs_dest = Path(state.bcs_dest)
     dest_size = state.dest_size_running

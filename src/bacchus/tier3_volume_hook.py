@@ -46,8 +46,6 @@ def main() -> None:
 
     st["chunk_seq"] = chunk_seq + 1
     state_path.write_text(json.dumps(st), encoding="utf-8")
-    rt.incremental_timestamp = int(time.time())
-    rt.incremental_timestamp_running = 0
 
     if st.get("statistics"):
         if st.get("runstatistics"):
@@ -55,6 +53,8 @@ def main() -> None:
         else:
             print(member)
 
+    rt.incremental_timestamp = int(time.time())
+    rt.incremental_timestamp_running = 0
     persistence.save(datafile, rt)
 
     if tar_fd == "none":
