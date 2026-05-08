@@ -122,3 +122,68 @@ def test_incremental_stats_legacy_keeps_dest_du_rescan(tmp_path: Path, monkeypat
     statsmod.incremental_stats_backup("test", state, "test.tar-3", 3)
     out = capsys.readouterr().out
     assert "dest..223k" in out
+
+
+def test_incremental_stats_backup_volume_cap_exceeds_estimate(capsys, tmp_path: Path, monkeypatch) -> None:
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        archive_mode="chunked",
+        bcs_dest=str(dest),
+        archive_volumes=5,
+        start_timestamp=0,
+        incremental_timestamp=0,
+        source_size_running=10_000,
+        dest_size_running=6_000,
+    )
+    monkeypatch.setattr(statsmod.time, "time", lambda: 300)
+    statsmod.incremental_stats_backup("test", state, "test.000010.tar", 10)
+    out = capsys.readouterr().out
+    assert "/10 " in out
+    assert " 90%" in out
+    assert "23h" not in out
+
+
+def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_path: Path, monkeypatch) -> None:
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    (dest / "extra.bin").write_bytes(b"x" * 5000)
+    state = persistence.RuntimeState(
+        archive_mode="chunked",
+        bcs_dest=str(dest),
+        source_size_total=200,
+        source_size_running=200,
+        dest_size_running=100,
+        start_timestamp=1000,
+    )
+
+    def boom_run(*args, **kwargs):
+        raise AssertionError("chunked completion must not invoke subprocess.run (du)")
+
+    monkeypatch.setattr(statsmod.subprocess, "run", boom_run)
+    statsmod.completion_stats_backup(state, tar_volume=2)
+    out = capsys.readouterr().out
+    assert "Overall compression ratio:     50%" in out
+    assert "Total size of destinations:    100k" in out
+
+
+def test_completion_stats_legacy_still_uses_du(capsys, tmp_path: Path, monkeypatch) -> None:
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        archive_mode="legacy",
+        bcs_dest=str(dest),
+        source_size_total=200,
+        source_size_running=200,
+        dest_size_running=0,
+        start_timestamp=1000,
+    )
+
+    def fake_run(cmd, **kwargs):
+        assert "du" in cmd
+        return subprocess.CompletedProcess(cmd, 0, stdout="0\n100 total\n")
+
+    monkeypatch.setattr(statsmod.subprocess, "run", fake_run)
+    statsmod.completion_stats_backup(state, tar_volume=2)
+    out = capsys.readouterr().out
+    assert "Overall compression ratio:     50%" in out

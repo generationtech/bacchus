@@ -48,18 +48,19 @@ def incremental_stats_backup(
     tar_volume: int,
 ) -> None:
     archive_volumes = state.archive_volumes
-    archive_max_name = len(basename) + len(str(archive_volumes)) + 6
-    archive_max_num = len(str(archive_volumes)) + 1
+    volume_cap = max(archive_volumes, tar_volume) if archive_volumes else tar_volume
+    archive_max_name = len(basename) + len(str(volume_cap)) + 6
+    archive_max_num = len(str(volume_cap)) + 1
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
-    pct = ((tar_volume - 1) * 100) // archive_volumes if archive_volumes else 0
+    pct = ((tar_volume - 1) * 100) // volume_cap if volume_cap else 0
     # Legacy tar -cM skips full stats for the first two volumes; chunked mode prints full lines from chunk 1.
     short_line = state.source_size_running == 0 or (
         tar_volume <= 2 and state.archive_mode != "chunked"
     )
     if short_line:
         print(
-            f"{tar_archive:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} {pct:4d}%"
+            f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%"
         )
         return
     if state.archive_mode == "chunked" and tar_volume <= 2:
@@ -67,7 +68,8 @@ def incremental_stats_backup(
         remain_time = avg_time * max(0, archive_volumes - tar_volume) if archive_volumes else 0
     else:
         avg_time = elapsed_time // (tar_volume - 2) if tar_volume > 2 else 0
-        remain_time = avg_time * (archive_volumes - tar_volume + 2) if archive_volumes else 0
+        raw_remain = avg_time * (archive_volumes - tar_volume + 2) if archive_volumes else 0
+        remain_time = max(0, raw_remain)
     incremental_time = timestamp - state.incremental_timestamp - state.incremental_timestamp_running
     bcs_dest = Path(state.bcs_dest)
     if state.archive_mode == "chunked":
@@ -111,7 +113,7 @@ def incremental_stats_backup(
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
     line = (
-        f"{tar_archive:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} {pct:4d}%  "
+        f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%  "
         f"{'remain..' + rem_txt:<{remain_w}s}"
         f"{'elapsed..' + el_txt:<{elapsed_w}s}"
         f"{'last..' + inc_txt:<{last_w}s}"
@@ -190,13 +192,16 @@ def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) 
     source_size_total_text = _fmt_int(state.source_size_total)
     tar_overhead = state.source_size_running - state.source_size_total
     bcs_dest = Path(state.bcs_dest)
-    du = subprocess.run(
-        ["du", "-c", "--apparent-size", str(bcs_dest)],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    dest_size_running = state.dest_size_running + int(du.stdout.strip().splitlines()[-1].split()[0])
+    if state.archive_mode == "chunked":
+        dest_size_running = state.dest_size_running
+    else:
+        du = subprocess.run(
+            ["du", "-c", "--apparent-size", str(bcs_dest)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        dest_size_running = state.dest_size_running + int(du.stdout.strip().splitlines()[-1].split()[0])
     dest_size_running_text = _fmt_int(dest_size_running)
     comp_ratio = 100 - ((dest_size_running * 100) // state.source_size_total) if state.source_size_total else 0
     print("\nBACKUP OPERATION COMPLETE")

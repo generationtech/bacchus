@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 ArchiveMode = Literal["chunked", "legacy"]
+ArchivePathScope = Literal["parent", "source"]
 
 
 @dataclass
@@ -40,6 +41,9 @@ class BcsConfig:
     mini_slice_size_kb: Optional[int] = None  # default volumesize
     start_chunk: int = 1
     lowdiskspace_multiplier: int = 2
+    # Chunked backup: tar member paths (restore reads whatever names were stored).
+    archive_path_scope: ArchivePathScope = "parent"
+    archive_top_dir: Optional[str] = None
 
     def resolved_absolute_max_kb(self) -> int:
         if self.absolute_max_size_kb is not None:

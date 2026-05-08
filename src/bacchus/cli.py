@@ -135,6 +135,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     pb = sub.add_parser("backup", help="create a backup")
     add_common(pb)
+    pb.add_argument(
+        "--archive-path-scope",
+        choices=["parent", "source"],
+        default="parent",
+        help="chunked backup: tar member paths relative to source's parent (default) or source root only",
+    )
+    pb.add_argument(
+        "--archive-top-dir",
+        default=None,
+        metavar="NAME",
+        help="chunked backup: store members as NAME/... relative to source (implies chdir source); "
+        "shortens paths and sets a stable top-level directory name",
+    )
     pr = sub.add_parser("restore", help="restore a backup")
     add_common(pr)
 
@@ -227,6 +240,8 @@ def _ns_to_cfg(ns: argparse.Namespace) -> BcsConfig:
         absolute_max_size_kb=ns.absolute_max_size,
         mini_slice_size_kb=ns.mini_slice_size,
         start_chunk=ns.start_chunk,
+        archive_path_scope=getattr(ns, "archive_path_scope", "parent"),
+        archive_top_dir=getattr(ns, "archive_top_dir", None),
     )
 
 
@@ -247,6 +262,11 @@ def main(argv: list[str] | None = None) -> int:
                 f"Absolute max chunk (kB):             {cfg.resolved_absolute_max_kb():,}".replace(",", "")
             )
             print(f"Mini MV slice (kB):                 {cfg.resolved_mini_slice_kb():,}".replace(",", ""))
+            scope = cfg.archive_path_scope
+            top = (cfg.archive_top_dir or "").strip()
+            print(f"Archive path scope:                  {scope}")
+            if top:
+                print(f"Archive top directory name:          {top}")
         print()
         _confirm_start(cfg, ns)
         if cfg.archive_mode == "legacy":

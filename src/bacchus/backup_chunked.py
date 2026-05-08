@@ -18,6 +18,35 @@ from bacchus.pipeline import du_sk_apparent, ship_raw_tar
 from bacchus.walk import iter_files_with_sizes
 
 
+def backup_tar_chdir(cfg: BcsConfig, source_root: Path) -> Path:
+    """GNU tar ``-C`` directory for chunked backup (constant for all members under ``source_root``)."""
+    top = (cfg.archive_top_dir or "").strip()
+    if top or cfg.archive_path_scope == "source":
+        return source_root
+    return source_root.parent
+
+
+def member_rel_for_backup(cfg: BcsConfig, source_root: Path, path: Path) -> str:
+    """
+    Member path relative to :func:`backup_tar_chdir`.
+
+    Default: historical layout — path relative to ``source_root.parent`` (includes source basename).
+
+    ``archive_path_scope`` source: relative to ``source_root`` only.
+
+    ``archive_top_dir``: ``{name}/{relative_to_source}`` with chdir ``source_root``.
+    """
+    parent = source_root.parent
+    rel_to_src = path.relative_to(source_root).as_posix()
+    rel_to_parent = path.relative_to(parent).as_posix()
+    top = (cfg.archive_top_dir or "").strip()
+    if top:
+        return f"{top}/{rel_to_src}"
+    if cfg.archive_path_scope == "source":
+        return rel_to_src
+    return rel_to_parent
+
+
 def _predict_after_add(current_raw_bytes: int, file_size: int) -> int:
     return current_raw_bytes + 512 + ((file_size + 511) // 512) * 512
 
@@ -173,7 +202,6 @@ def run_backup(cfg: BcsConfig) -> None:
     atexit.register(cleanup)
 
     source_root = cfg.source.resolve()
-    parent = source_root.parent
     source_size_total = int(
         subprocess.check_output(["du", "-sk", "--apparent-size", str(source_root)], text=True).split()[0]
     )
@@ -194,13 +222,11 @@ def run_backup(cfg: BcsConfig) -> None:
         persistence.initial_backup_state(dest, est_chunks, ts, source_size_total, archive_mode="chunked"),
     )
 
+    tar_work_cwd = backup_tar_chdir(cfg, source_root)
+
     chunk_index = 1
     pending_paths: list[str] = []
     pending_raw = 0
-
-    def rel(p: Path) -> str:
-        # Logical path under parent (do not resolve symlinks — targets may be outside the tree).
-        return p.relative_to(parent).as_posix()
 
     def flush() -> None:
         nonlocal chunk_index, pending_paths, pending_raw
@@ -209,7 +235,7 @@ def run_backup(cfg: BcsConfig) -> None:
         current_tar = tardir / f"_cur.{os.getpid()}.tar"
         if current_tar.exists():
             current_tar.unlink()
-        extern.tar_create_archive(pending_paths, current_tar, parent, verbose=cfg.verbosetar)
+        extern.tar_create_archive(pending_paths, current_tar, tar_work_cwd, verbose=cfg.verbosetar)
         state = persistence.load(tmp_runtime)
         state.source_size_running += du_sk_apparent(current_tar)
         member = f"{cfg.basename}.{chunk_index:06d}.tar"
@@ -229,10 +255,10 @@ def run_backup(cfg: BcsConfig) -> None:
         pending_raw = 0
 
     for path, file_size in iter_files_with_sizes(source_root):
-        rel_path = rel(path)
+        rel_path = member_rel_for_backup(cfg, source_root, path)
         if file_size > absolute:
             flush()
-            chunk_index = _tier3(rel_path, parent, cfg, tardir, compressdir, dest, tmp_runtime, tmp_prefix, chunk_index)
+            chunk_index = _tier3(rel_path, tar_work_cwd, cfg, tardir, compressdir, dest, tmp_runtime, tmp_prefix, chunk_index)
             continue
 
         projected = _predict_after_add(pending_raw, file_size)
