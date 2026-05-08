@@ -45,8 +45,9 @@ def ramdisk_size_bytes(volumesize_kb: int, compress: bool, encrypt: bool) -> int
 
     Legacy bash used one ``volumesize`` slab per enabled stage (compress / encrypt) plus 1% slack.
     When **both** are on, ``pigz`` keeps the raw ``.tar`` and growing ``.gz`` on the same filesystem
-    until compression finishes, and the raw tar can slightly exceed the nominal ``-v`` target—so we
-    add an extra overlap margin (25% of one volume) to avoid ENOSPC on large ``-v`` runs.
+    until compression finishes; the raw tar can exceed the nominal ``-v`` target and gzip output can
+    be large for incompressible data—so we add a **third full volume slab** for that peak (3×
+    ``volumesize_kb`` before the 1% byte slack) to avoid ENOSPC on large ``-v`` runs.
     """
     ramdisk_kb = 0
     if compress:
@@ -54,7 +55,7 @@ def ramdisk_size_bytes(volumesize_kb: int, compress: bool, encrypt: bool) -> int
     if encrypt:
         ramdisk_kb += volumesize_kb
     if compress and encrypt:
-        ramdisk_kb += volumesize_kb // 4
+        ramdisk_kb += volumesize_kb
     return (ramdisk_kb * 1024) + ((volumesize_kb * 1024) // 100)
 
 
