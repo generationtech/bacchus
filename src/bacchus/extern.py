@@ -161,6 +161,26 @@ def tar_create_file_archive(
     run_check(args)
 
 
+def tar_create_archive(
+    paths_relative_to_cwd: List[str],
+    archive_path: Path,
+    cwd: Path,
+    verbose: bool,
+) -> None:
+    """Create one archive in a single tar invocation from paths relative to cwd."""
+    if not paths_relative_to_cwd:
+        return
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+    args: List[str] = ["tar", "--format=posix", "-c"] + (["-v"] if verbose else []) + [
+        "-f",
+        str(archive_path),
+        "-C",
+        str(cwd),
+    ]
+    args += paths_relative_to_cwd
+    run_check(args)
+
+
 def tar_create_multivolume_single_member(
     cwd: Path,
     path_relative_to_cwd: str,

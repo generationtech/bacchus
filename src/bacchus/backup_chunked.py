@@ -116,9 +116,10 @@ def _tier3(
         member = f"{cfg.basename}.{seq:06d}.tar"
         # Size before ship: ``ship_raw_tar`` moves ``last_raw`` out of ``tardir`` (often ``replace``).
         extra_kb = du_sk_apparent(last_raw)
-        ship_raw_tar(last_raw, dest, member, compress=cfg.compress, password=cfg.password, compressdir=compressdir)
+        final_path = ship_raw_tar(last_raw, dest, member, compress=cfg.compress, password=cfg.password, compressdir=compressdir)
         rt = persistence.load(datafile)
         rt.source_size_running += extra_kb
+        rt.dest_size_running += du_sk_apparent(final_path)
         st["chunk_seq"] = seq + 1
         tier3_state.write_text(json.dumps(st), encoding="utf-8")
         persistence.save(datafile, rt)
@@ -192,25 +193,28 @@ def run_backup(cfg: BcsConfig) -> None:
     )
 
     chunk_index = 1
-    current_tar: Path | None = None
-    current_raw = 0
+    pending_paths: list[str] = []
+    pending_raw = 0
 
     def rel(p: Path) -> str:
         # Logical path under parent (do not resolve symlinks — targets may be outside the tree).
         return p.relative_to(parent).as_posix()
 
     def flush() -> None:
-        nonlocal chunk_index, current_tar, current_raw
-        if current_tar is None or not current_tar.is_file() or current_tar.stat().st_size == 0:
-            current_tar = None
-            current_raw = 0
+        nonlocal chunk_index, pending_paths, pending_raw
+        if not pending_paths:
             return
+        current_tar = tardir / f"_cur.{os.getpid()}.tar"
+        if current_tar.exists():
+            current_tar.unlink()
+        extern.tar_create_archive(pending_paths, current_tar, parent, verbose=cfg.verbosetar)
         state = persistence.load(tmp_runtime)
-        state.source_size_running += int(
-            subprocess.check_output(["du", "-sk", "--apparent-size", str(current_tar)], text=True).split()[0]
-        )
+        state.source_size_running += du_sk_apparent(current_tar)
         member = f"{cfg.basename}.{chunk_index:06d}.tar"
-        ship_raw_tar(current_tar, dest, member, compress=cfg.compress, password=cfg.password, compressdir=compressdir)
+        final_path = ship_raw_tar(
+            current_tar, dest, member, compress=cfg.compress, password=cfg.password, compressdir=compressdir
+        )
+        state.dest_size_running += du_sk_apparent(final_path)
         persistence.save(tmp_runtime, state)
         _emit_chunked_ship_progress(cfg, tmp_runtime, member, chunk_index)
         state = persistence.load(tmp_runtime)
@@ -219,40 +223,31 @@ def run_backup(cfg: BcsConfig) -> None:
         persistence.save(tmp_runtime, state)
         current_tar.unlink(missing_ok=True)
         chunk_index += 1
-        current_tar = None
-        current_raw = 0
-
-    def start_chunk(p: Path) -> None:
-        nonlocal current_tar, current_raw
-        current_tar = tardir / f"_cur.{os.getpid()}.tar"
-        if current_tar.exists():
-            current_tar.unlink()
-        extern.tar_create_file_archive([rel(p)], current_tar, parent, append=False, verbose=cfg.verbosetar)
-        current_raw = current_tar.stat().st_size
-
-    def append_to_chunk(p: Path) -> None:
-        nonlocal current_raw
-        assert current_tar is not None
-        extern.tar_create_file_archive([rel(p)], current_tar, parent, append=True, verbose=cfg.verbosetar)
-        current_raw = current_tar.stat().st_size
+        pending_paths = []
+        pending_raw = 0
 
     for path, file_size in iter_files_with_sizes(source_root):
+        rel_path = rel(path)
         if file_size > absolute:
             flush()
-            chunk_index = _tier3(rel(path), parent, cfg, tardir, compressdir, dest, tmp_runtime, tmp_prefix, chunk_index)
+            chunk_index = _tier3(rel_path, parent, cfg, tardir, compressdir, dest, tmp_runtime, tmp_prefix, chunk_index)
             continue
 
-        if current_tar is None:
-            start_chunk(path)
-            continue
-
-        projected = _predict_after_add(current_raw, file_size)
-        if projected > desired:
+        projected = _predict_after_add(pending_raw, file_size)
+        if projected > desired and pending_paths:
             flush()
-            start_chunk(path)
+            projected = _predict_after_add(0, file_size)
+
+        if projected > desired:
+            # Defensive: normal files should fit desired unless metadata estimates drift unexpectedly.
+            # Keep forward progress by placing it alone in a chunk.
+            pending_paths = [rel_path]
+            pending_raw = projected
+            flush()
             continue
 
-        append_to_chunk(path)
+        pending_paths.append(rel_path)
+        pending_raw = projected
 
     flush()
     if chunk_index > 1 and cfg.statistics and cfg.endstatistics:

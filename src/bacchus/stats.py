@@ -70,15 +70,18 @@ def incremental_stats_backup(
         remain_time = avg_time * (archive_volumes - tar_volume + 2) if archive_volumes else 0
     incremental_time = timestamp - state.incremental_timestamp - state.incremental_timestamp_running
     bcs_dest = Path(state.bcs_dest)
-    dest_size = state.dest_size_running
-    if any(bcs_dest.glob(f"{basename}*")):
-        du = subprocess.run(
-            ["du", "-c", "--apparent-size", str(bcs_dest)],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        dest_size += int(du.stdout.strip().splitlines()[-1].split()[0])
+    if state.archive_mode == "chunked":
+        dest_size = state.dest_size_running
+    else:
+        dest_size = state.dest_size_running
+        if any(bcs_dest.glob(f"{basename}*")):
+            du = subprocess.run(
+                ["du", "-c", "--apparent-size", str(bcs_dest)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            dest_size += int(du.stdout.strip().splitlines()[-1].split()[0])
     comp_ratio = 100 - ((dest_size * 100) // state.source_size_running) if state.source_size_running else 0
     # Dynamic column widths (legacy bash incremental_stats): running maxima keep columns aligned.
     rem_txt = duration_readable(remain_time)

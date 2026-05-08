@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 from bacchus import persistence, stats as statsmod
@@ -76,3 +77,48 @@ def test_incremental_stats_restore_line_has_spaces(capsys) -> None:
     out = capsys.readouterr().out.strip()
     assert re.search(r"\d+k dest\.\.", out), f"expected space before dest.. in: {out!r}"
     assert re.search(r"\d+k [0-9]{2}-[0-9]{2}-[0-9]{4}", out), f"expected space before date in: {out!r}"
+
+
+def test_incremental_stats_chunked_avoids_dest_du_rescan(tmp_path: Path, monkeypatch, capsys) -> None:
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        archive_mode="chunked",
+        bcs_dest=str(dest),
+        archive_volumes=10,
+        start_timestamp=100,
+        incremental_timestamp=100,
+        source_size_running=2000,
+        dest_size_running=1500,
+    )
+
+    def fail_run(*args, **kwargs):
+        raise AssertionError("chunked incremental stats should not call subprocess.run for destination du")
+
+    monkeypatch.setattr(statsmod.subprocess, "run", fail_run)
+    statsmod.incremental_stats_backup("test", state, "test.000003.tar", 3)
+    out = capsys.readouterr().out
+    assert "dest..1500k" in out
+
+
+def test_incremental_stats_legacy_keeps_dest_du_rescan(tmp_path: Path, monkeypatch, capsys) -> None:
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    (dest / "test.tar").write_text("x", encoding="utf-8")
+    state = persistence.RuntimeState(
+        archive_mode="legacy",
+        bcs_dest=str(dest),
+        archive_volumes=10,
+        start_timestamp=100,
+        incremental_timestamp=100,
+        source_size_running=2000,
+        dest_size_running=100,
+    )
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args[0], 0, stdout="123\n123 total\n")
+
+    monkeypatch.setattr(statsmod.subprocess, "run", fake_run)
+    statsmod.incremental_stats_backup("test", state, "test.tar-3", 3)
+    out = capsys.readouterr().out
+    assert "dest..223k" in out

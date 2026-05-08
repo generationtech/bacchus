@@ -8,9 +8,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+_REPO_SRC = Path(__file__).resolve().parents[1] / "src"
+
 
 def _run(*args: str) -> None:
-    subprocess.check_call([sys.executable, "-m", "bacchus", *args])
+    env = os.environ.copy()
+    p = str(_REPO_SRC)
+    env["PYTHONPATH"] = p + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    subprocess.check_call([sys.executable, "-m", "bacchus", *args], env=env)
 
 
 def test_chunked_no_compress_roundtrip(tmp_path: Path) -> None:

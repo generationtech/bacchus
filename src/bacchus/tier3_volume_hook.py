@@ -42,7 +42,8 @@ def main() -> None:
     rt.source_size_running += du_sk_apparent(raw_path)
 
     member = f"{basename}.{chunk_seq:06d}.tar"
-    ship_raw_tar(raw_path, dest, member, compress=compress, password=password, compressdir=compressdir)
+    final_path = ship_raw_tar(raw_path, dest, member, compress=compress, password=password, compressdir=compressdir)
+    rt.dest_size_running += du_sk_apparent(final_path)
 
     st["chunk_seq"] = chunk_seq + 1
     state_path.write_text(json.dumps(st), encoding="utf-8")
