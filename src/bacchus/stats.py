@@ -49,6 +49,21 @@ def _backup_progress_pct(state: "persistence.RuntimeState") -> int:
     return min(100, (state.source_size_running * 100) // total)
 
 
+def _chunked_volume_total_display(pct: int, tar_volume: int, archive_volumes: int) -> int:
+    """
+    Running estimate of total chunk count for ``/NNN``, consistent with source-based ``pct``.
+
+    Uses ``ceil(tar_volume * 100 / pct)`` when ``0 < pct < 100``, floored by the initial
+    ``archive_volumes`` estimate and current ``tar_volume``.
+    """
+    if pct <= 0:
+        return max(archive_volumes, tar_volume) if archive_volumes else tar_volume
+    if pct >= 100:
+        return tar_volume
+    implied = (tar_volume * 100 + pct - 1) // pct
+    return max(tar_volume, archive_volumes, implied)
+
+
 def _fmt_kb_scaled(kb: int) -> str:
     """
     Format KiB counts (``du -sk`` / ``du_sk_apparent``) with K/M/G/T/P suffix.
@@ -79,12 +94,15 @@ def incremental_stats_backup(
     tar_volume: int,
 ) -> None:
     archive_volumes = state.archive_volumes
-    volume_cap = max(archive_volumes, tar_volume) if archive_volumes else tar_volume
+    pct = _backup_progress_pct(state)
+    if state.archive_mode == "chunked":
+        volume_cap = _chunked_volume_total_display(pct, tar_volume, archive_volumes)
+    else:
+        volume_cap = max(archive_volumes, tar_volume) if archive_volumes else tar_volume
     archive_max_name = len(basename) + len(str(volume_cap)) + 6
     archive_max_num = len(str(volume_cap)) + 1
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
-    pct = _backup_progress_pct(state)
     # Legacy tar -cM skips full stats for the first two volumes; chunked mode prints full lines from chunk 1.
     short_line = state.source_size_running == 0 or (
         tar_volume <= 2 and state.archive_mode != "chunked"
@@ -96,7 +114,7 @@ def incremental_stats_backup(
         return
     if state.archive_mode == "chunked":
         avg_time = elapsed_time // tar_volume if tar_volume > 0 else 0
-        remain_time = avg_time * max(0, archive_volumes - tar_volume) if archive_volumes else 0
+        remain_time = avg_time * max(0, volume_cap - tar_volume)
     else:
         avg_time = elapsed_time // (tar_volume - 2) if tar_volume > 2 else 0
         raw_remain = avg_time * (archive_volumes - tar_volume + 2) if archive_volumes else 0

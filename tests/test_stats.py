@@ -145,9 +145,30 @@ def test_incremental_stats_backup_volume_cap_exceeds_estimate(capsys, tmp_path: 
     monkeypatch.setattr(statsmod.time, "time", lambda: 300)
     statsmod.incremental_stats_backup("test", state, "test.000010.tar", 10)
     out = capsys.readouterr().out
-    assert "/10 " in out
+    assert "/12 " in out
     assert " 90%" in out
     assert "23h" not in out
+
+
+def test_incremental_stats_chunked_volume_slash_matches_source_pct(capsys, tmp_path: Path, monkeypatch) -> None:
+    """At vol 77 and 37% source progress, /NNN should be ceil(77*100/37) == 209."""
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        archive_mode="chunked",
+        bcs_dest=str(dest),
+        archive_volumes=182,
+        source_size_total=10_000,
+        start_timestamp=0,
+        incremental_timestamp=0,
+        source_size_running=3_700,
+        dest_size_running=1_000,
+    )
+    monkeypatch.setattr(statsmod.time, "time", lambda: 100)
+    statsmod.incremental_stats_backup("test", state, "test.000077.tar", 77)
+    out = capsys.readouterr().out
+    assert " 37%" in out
+    assert "/209 " in out
 
 
 def test_incremental_stats_chunked_avg_per_chunk_not_legacy_divisor(capsys, tmp_path: Path, monkeypatch) -> None:
@@ -256,3 +277,10 @@ def test_backup_progress_pct() -> None:
     assert statsmod._backup_progress_pct(st2) == 100
     st3 = persistence.RuntimeState(source_size_total=0, source_size_running=100)
     assert statsmod._backup_progress_pct(st3) == 0
+
+
+def test_chunked_volume_total_display() -> None:
+    assert statsmod._chunked_volume_total_display(0, 3, 182) == 182
+    assert statsmod._chunked_volume_total_display(37, 77, 182) == 209
+    assert statsmod._chunked_volume_total_display(100, 50, 182) == 50
+    assert statsmod._chunked_volume_total_display(90, 10, 5) == 12
