@@ -213,7 +213,7 @@ def run_backup(cfg: BcsConfig) -> None:
     est_chunks = max(1, (source_size_total * 1024 + desired - 1) // desired)
     if cfg.estimate:
         print(f"Estimating total size of:  {source_root}\n")
-        print(f"Total size:                {source_size_total:,}k".replace(",", ""))
+        print(f"Total size:                {statsmod._fmt_kb_scaled(source_size_total)}")
         print(
             f"Estimated chunk count (rough): {est_chunks} (nominal target {cfg.volumesize_kb:,}k)".replace(",", "")
         )

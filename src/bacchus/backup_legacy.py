@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from bacchus import extern, persistence, ramdisk
+from bacchus import stats as statsmod
 from bacchus.config import BcsConfig
 
 
@@ -74,7 +75,7 @@ def run_backup(cfg: BcsConfig) -> None:
 
     if cfg.estimate:
         print(f"Estimating total size of:  {cfg.source}\n")
-        print(f"Total size:                {source_size_total:,}k".replace(",", ""))
+        print(f"Total size:                {statsmod._fmt_kb_scaled(source_size_total)}")
         print(
             f"Number of archive volumes: {total_volumes} ({cfg.volumesize_kb:,}k each)".replace(",", "")
         )

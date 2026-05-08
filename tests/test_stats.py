@@ -151,7 +151,7 @@ def test_incremental_stats_backup_volume_cap_exceeds_estimate(capsys, tmp_path: 
 
 
 def test_incremental_stats_chunked_volume_slash_matches_source_pct(capsys, tmp_path: Path, monkeypatch) -> None:
-    """At vol 77 and 37% source progress, /NNN should be ceil(77*100/37) == 209."""
+    """At vol 77 and 37% source progress, /NNN uses byte-ratio ceil(77*10000/3700) == 209."""
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
@@ -280,7 +280,44 @@ def test_backup_progress_pct() -> None:
 
 
 def test_chunked_volume_total_display() -> None:
-    assert statsmod._chunked_volume_total_display(0, 3, 182) == 182
-    assert statsmod._chunked_volume_total_display(37, 77, 182) == 209
-    assert statsmod._chunked_volume_total_display(100, 50, 182) == 50
-    assert statsmod._chunked_volume_total_display(90, 10, 5) == 12
+    st0 = persistence.RuntimeState(
+        archive_volumes=182, source_size_total=10_000, source_size_running=0
+    )
+    assert statsmod._chunked_volume_total_display(st0, 3) == 182
+
+    st1 = persistence.RuntimeState(
+        archive_volumes=182,
+        source_size_total=10_000,
+        source_size_running=3_700,
+        chunk_total_display_smooth=0,
+    )
+    assert statsmod._chunked_volume_total_display(st1, 77) == 209
+    assert st1.chunk_total_display_smooth == 209
+
+    st2 = persistence.RuntimeState(
+        archive_volumes=182,
+        source_size_total=10_000,
+        source_size_running=10_000,
+        chunk_total_display_smooth=999,
+    )
+    assert statsmod._chunked_volume_total_display(st2, 50) == 50
+    assert st2.chunk_total_display_smooth == 50
+
+    st3 = persistence.RuntimeState(
+        archive_volumes=5, source_size_total=100_000, source_size_running=90_000
+    )
+    assert statsmod._chunked_volume_total_display(st3, 10) == 12
+
+
+def test_chunked_volume_total_display_ema_smoothing() -> None:
+    st = persistence.RuntimeState(
+        archive_volumes=100,
+        source_size_total=10_000,
+        source_size_running=5000,
+        chunk_total_display_smooth=200,
+    )
+    raw = max(20, 100, (20 * 10_000 + 5000 - 1) // 5000)
+    blended = (3 * 200 + raw + 2) // 4
+    expected = max(20, 100, blended)
+    assert statsmod._chunked_volume_total_display(st, 20) == expected
+    assert st.chunk_total_display_smooth == expected

@@ -6,10 +6,8 @@ import glob
 import subprocess
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from bacchus import persistence
+from bacchus import persistence
 
 
 def duration_readable(total_seconds: int) -> str:
@@ -49,19 +47,34 @@ def _backup_progress_pct(state: "persistence.RuntimeState") -> int:
     return min(100, (state.source_size_running * 100) // total)
 
 
-def _chunked_volume_total_display(pct: int, tar_volume: int, archive_volumes: int) -> int:
+def _chunked_volume_total_display(state: persistence.RuntimeState, tar_volume: int) -> int:
     """
-    Running estimate of total chunk count for ``/NNN``, consistent with source-based ``pct``.
-
-    Uses ``ceil(tar_volume * 100 / pct)`` when ``0 < pct < 100``, floored by the initial
-    ``archive_volumes`` estimate and current ``tar_volume``.
+    Running estimate of total chunk count for ``/NNN``, from bytes processed vs total
+    (avoids integer-percent quantization), floored by ``archive_volumes`` and ``tar_volume``,
+    then lightly EMA-smoothed via ``state.chunk_total_display_smooth``.
     """
-    if pct <= 0:
+    archive_volumes = state.archive_volumes
+    running = state.source_size_running
+    total = state.source_size_total
+    if running <= 0 or total <= 0:
         return max(archive_volumes, tar_volume) if archive_volumes else tar_volume
+    pct = min(100, (running * 100) // total)
     if pct >= 100:
+        state.chunk_total_display_smooth = tar_volume
         return tar_volume
-    implied = (tar_volume * 100 + pct - 1) // pct
-    return max(tar_volume, archive_volumes, implied)
+    raw = max(
+        tar_volume,
+        archive_volumes,
+        (tar_volume * total + running - 1) // running,
+    )
+    prev = state.chunk_total_display_smooth
+    if prev <= 0:
+        cap = raw
+    else:
+        cap = (3 * prev + raw + 2) // 4
+    cap = max(tar_volume, archive_volumes, cap)
+    state.chunk_total_display_smooth = cap
+    return cap
 
 
 def _fmt_kb_scaled(kb: int) -> str:
@@ -96,7 +109,7 @@ def incremental_stats_backup(
     archive_volumes = state.archive_volumes
     pct = _backup_progress_pct(state)
     if state.archive_mode == "chunked":
-        volume_cap = _chunked_volume_total_display(pct, tar_volume, archive_volumes)
+        volume_cap = _chunked_volume_total_display(state, tar_volume)
     else:
         volume_cap = max(archive_volumes, tar_volume) if archive_volumes else tar_volume
     archive_max_name = len(basename) + len(str(volume_cap)) + 6
