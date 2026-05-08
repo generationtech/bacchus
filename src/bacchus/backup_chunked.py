@@ -15,7 +15,7 @@ from bacchus import extern, persistence, ramdisk
 from bacchus import stats as statsmod
 from bacchus.config import BcsConfig
 from bacchus.pipeline import du_sk_apparent, ship_raw_tar
-from bacchus.walk import iter_files_with_sizes
+from bacchus.walk import iter_files_from_ordered_paths, iter_source_paths_tar_order
 
 
 def backup_tar_chdir(cfg: BcsConfig, source_root: Path) -> Path:
@@ -174,6 +174,8 @@ def _tier3(
 def run_backup(cfg: BcsConfig) -> None:
     tmp_prefix = Path(tempfile.mktemp(prefix="baccus-", dir="/tmp"))
     tmp_runtime = Path(str(tmp_prefix) + ".runtime")
+    # Wall clock for completion "Total runtime" (includes ramdisk, du, preorder walk, and all chunks).
+    wall_clock_start = int(time.time())
 
     rd: ramdisk.Ramdisk | None = None
     tardir = cfg.tardir.resolve()
@@ -216,10 +218,18 @@ def run_backup(cfg: BcsConfig) -> None:
             f"Estimated chunk count (rough): {est_chunks} (nominal target {cfg.volumesize_kb:,}k)".replace(",", "")
         )
         print()
-    ts = int(time.time())
+    ordered_paths = iter_source_paths_tar_order(source_root)
+    stats_start = int(time.time())
     persistence.save(
         tmp_runtime,
-        persistence.initial_backup_state(dest, est_chunks, ts, source_size_total, archive_mode="chunked"),
+        persistence.initial_backup_state(
+            dest,
+            est_chunks,
+            stats_start,
+            source_size_total,
+            archive_mode="chunked",
+            wall_clock_start_timestamp=wall_clock_start,
+        ),
     )
 
     tar_work_cwd = backup_tar_chdir(cfg, source_root)
@@ -254,7 +264,7 @@ def run_backup(cfg: BcsConfig) -> None:
         pending_paths = []
         pending_raw = 0
 
-    for path, file_size in iter_files_with_sizes(source_root):
+    for path, file_size in iter_files_from_ordered_paths(ordered_paths):
         rel_path = member_rel_for_backup(cfg, source_root, path)
         if file_size > absolute:
             flush()

@@ -29,8 +29,8 @@ def test_chunked_uses_single_tar_create_per_flushed_chunk(tmp_path: Path, monkey
     )
     monkeypatch.setattr(
         backup_chunked,
-        "iter_files_with_sizes",
-        lambda _source: ((p, 600) for p in files),
+        "iter_files_from_ordered_paths",
+        lambda _ordered: ((p, 600) for p in files),
     )
     monkeypatch.setattr(backup_chunked, "du_sk_apparent", lambda _p: 1)
 
@@ -105,8 +105,8 @@ def test_chunked_archive_path_scope_source(tmp_path: Path, monkeypatch) -> None:
     )
     monkeypatch.setattr(
         backup_chunked,
-        "iter_files_with_sizes",
-        lambda _source: ((p, 600) for p in files),
+        "iter_files_from_ordered_paths",
+        lambda _ordered: ((p, 600) for p in files),
     )
     monkeypatch.setattr(backup_chunked, "du_sk_apparent", lambda _p: 1)
 
@@ -178,8 +178,8 @@ def test_chunked_archive_top_dir_prefixes_members(tmp_path: Path, monkeypatch) -
     )
     monkeypatch.setattr(
         backup_chunked,
-        "iter_files_with_sizes",
-        lambda _source: ((p, 600) for p in files),
+        "iter_files_from_ordered_paths",
+        lambda _ordered: ((p, 600) for p in files),
     )
     monkeypatch.setattr(backup_chunked, "du_sk_apparent", lambda _p: 1)
 

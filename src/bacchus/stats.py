@@ -187,7 +187,9 @@ def incremental_stats_restore(
 
 def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) -> None:
     completion_timestamp = int(time.time())
-    completion_time = completion_timestamp - state.start_timestamp - state.start_timestamp_running
+    wall = state.wall_clock_start_timestamp
+    completion_base = wall if wall > 0 else state.start_timestamp
+    completion_time = completion_timestamp - completion_base - state.start_timestamp_running
     avg_time = completion_time // (tar_volume - 1) if tar_volume > 1 else completion_time
     source_size_total_text = _fmt_int(state.source_size_total)
     tar_overhead = state.source_size_running - state.source_size_total

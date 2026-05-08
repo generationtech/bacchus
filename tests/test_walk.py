@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bacchus.walk import iter_files_with_sizes, iter_source_paths_tar_order
+from bacchus.walk import (
+    iter_files_from_ordered_paths,
+    iter_files_with_sizes,
+    iter_source_paths_tar_order,
+)
 
 
 def test_walk_order(tmp_path: Path) -> None:
@@ -18,10 +22,14 @@ def test_walk_order(tmp_path: Path) -> None:
     assert keys[1:] == ["src/a", "src/a/a.txt", "src/a/z.txt", "src/b", "src/b/m.txt"]
 
 
-def test_iter_files_with_sizes(tmp_path: Path) -> None:
+def test_iter_files_from_ordered_paths_matches_iter_files_with_sizes(tmp_path: Path) -> None:
     root = tmp_path / "s"
     (root / "x").mkdir(parents=True)
     (root / "x" / "f").write_text("data")
-    items = list(iter_files_with_sizes(root))
-    assert len(items) == 1
-    assert items[0][0] == root / "x" / "f"
+    (root / "y").mkdir()
+    ordered = iter_source_paths_tar_order(root)
+    a = list(iter_files_from_ordered_paths(ordered))
+    b = list(iter_files_with_sizes(root))
+    assert a == b
+    assert len(a) == 1
+    assert a[0][0] == root / "x" / "f"

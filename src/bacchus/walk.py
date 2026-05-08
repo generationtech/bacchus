@@ -41,12 +41,17 @@ def iter_source_paths_tar_order(source: Path) -> List[Path]:
     return paths
 
 
-def iter_files_with_sizes(source: Path) -> Iterator[Tuple[Path, int]]:
-    """Yield (path, logical size in bytes) for regular files and symlinks only (chunk sizing)."""
-    for p in iter_source_paths_tar_order(source):
+def iter_files_from_ordered_paths(paths: List[Path]) -> Iterator[Tuple[Path, int]]:
+    """Yield (path, logical size) for regular files and symlinks; order is that of ``paths``."""
+    for p in paths:
         try:
             st = p.lstat()
         except OSError:
             continue
         if stat.S_ISREG(st.st_mode) or stat.S_ISLNK(st.st_mode):
             yield p, st.st_size
+
+
+def iter_files_with_sizes(source: Path) -> Iterator[Tuple[Path, int]]:
+    """Yield (path, logical size in bytes) for regular files and symlinks only (chunk sizing)."""
+    yield from iter_files_from_ordered_paths(iter_source_paths_tar_order(source))

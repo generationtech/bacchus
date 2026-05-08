@@ -167,6 +167,30 @@ def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_pa
     assert "Total size of destinations:    100k" in out
 
 
+def test_completion_stats_chunked_total_runtime_uses_wall_clock(capsys, tmp_path: Path, monkeypatch) -> None:
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        archive_mode="chunked",
+        bcs_dest=str(dest),
+        source_size_total=200,
+        source_size_running=200,
+        dest_size_running=100,
+        start_timestamp=1000,
+        wall_clock_start_timestamp=100,
+    )
+
+    monkeypatch.setattr(statsmod.time, "time", lambda: 400)
+
+    def boom_run(*args, **kwargs):
+        raise AssertionError("chunked completion must not invoke subprocess.run (du)")
+
+    monkeypatch.setattr(statsmod.subprocess, "run", boom_run)
+    statsmod.completion_stats_backup(state, tar_volume=2)
+    out = capsys.readouterr().out
+    assert "Total runtime:                 5m" in out
+
+
 def test_completion_stats_legacy_still_uses_du(capsys, tmp_path: Path, monkeypatch) -> None:
     dest = tmp_path / "dest"
     dest.mkdir()

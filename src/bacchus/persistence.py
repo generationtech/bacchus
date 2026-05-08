@@ -32,6 +32,8 @@ class RuntimeState:
     archive_mode: str = "chunked"
     chunk_index: int = 0
     mv_group_open: bool = False
+    # Chunked backup: wall clock at run start; incremental stats use ``start_timestamp`` after preorder walk.
+    wall_clock_start_timestamp: int = 0
 
     def to_json(self) -> str:
         d = asdict(self)
@@ -63,6 +65,7 @@ def initial_backup_state(
     timestamp: int,
     source_size_total: int,
     archive_mode: str = "chunked",
+    wall_clock_start_timestamp: int = 0,
 ) -> RuntimeState:
     return RuntimeState(
         bcs_dest=str(dest),
@@ -71,6 +74,7 @@ def initial_backup_state(
         incremental_timestamp=timestamp,
         source_size_total=source_size_total,
         archive_mode=archive_mode,
+        wall_clock_start_timestamp=wall_clock_start_timestamp,
     )
 
 
