@@ -41,6 +41,37 @@ def _fmt_int(n: int) -> str:
     return f"{n:,}".replace(",", "")
 
 
+def _backup_progress_pct(state: "persistence.RuntimeState") -> int:
+    """Percent of source tree covered by running tar size (KiB); cap at 100."""
+    total = state.source_size_total
+    if total <= 0:
+        return 0
+    return min(100, (state.source_size_running * 100) // total)
+
+
+def _fmt_kb_scaled(kb: int) -> str:
+    """
+    Format KiB counts (``du -sk`` / ``du_sk_apparent``) with K/M/G/T/P suffix.
+    Uses 1024 steps; advances to the next unit while the value is >= 1000
+    (so e.g. 1000 KiB becomes ~1M, not ``1000K``).
+    """
+    if kb <= 0:
+        return "0K"
+    KB = 1024.0
+    suffixes = ("K", "M", "G", "T", "P")
+    v = float(kb)
+    u = 0
+    while u < len(suffixes) - 1 and v >= 1000:
+        v /= KB
+        u += 1
+    rounded = round(v, 1)
+    if abs(rounded - int(round(rounded))) < 1e-6:
+        num = str(int(round(rounded)))
+    else:
+        num = f"{rounded:.1f}".rstrip("0").rstrip(".")
+    return f"{num}{suffixes[u]}"
+
+
 def incremental_stats_backup(
     basename: str,
     state: "persistence.RuntimeState",
@@ -53,7 +84,7 @@ def incremental_stats_backup(
     archive_max_num = len(str(volume_cap)) + 1
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
-    pct = ((tar_volume - 1) * 100) // volume_cap if volume_cap else 0
+    pct = _backup_progress_pct(state)
     # Legacy tar -cM skips full stats for the first two volumes; chunked mode prints full lines from chunk 1.
     short_line = state.source_size_running == 0 or (
         tar_volume <= 2 and state.archive_mode != "chunked"
@@ -105,10 +136,10 @@ def incremental_stats_backup(
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_txt))
     compr_w = state.comp_ratio_text_size_running + 10
 
-    src_fmt = _fmt_int(state.source_size_running)
-    dst_fmt = _fmt_int(dest_size)
-    src_seg = f"source..{src_fmt}k"
-    dst_seg = f"dest..{dst_fmt}k"
+    src_fmt = _fmt_kb_scaled(state.source_size_running)
+    dst_fmt = _fmt_kb_scaled(dest_size)
+    src_seg = f"source..{src_fmt}"
+    dst_seg = f"dest..{dst_fmt}"
     state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 

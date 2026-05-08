@@ -7,21 +7,24 @@ from pathlib import Path
 from bacchus import persistence, stats as statsmod
 
 
-def test_incremental_stats_backup_line_has_spaces(capsys, tmp_path: Path) -> None:
+def test_incremental_stats_backup_line_has_spaces(capsys, tmp_path: Path, monkeypatch) -> None:
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
         bcs_dest=str(dest),
         archive_volumes=10,
+        source_size_total=10_000_000,
         start_timestamp=1_000,
         incremental_timestamp=1_000,
         source_size_running=2_879_170,
         dest_size_running=2_833_328,
     )
+    monkeypatch.setattr(statsmod.time, "time", lambda: 1_050)
     statsmod.incremental_stats_backup("test", state, "test.000003.tar", 3)
     out = capsys.readouterr().out.strip()
-    assert re.search(r"\d+k dest\.\.", out), f"expected space before dest.. in: {out!r}"
-    assert re.search(r"\d+k [0-9]{2}-[0-9]{2}-[0-9]{4}", out), f"expected space before date in: {out!r}"
+    assert re.search(r"source\.\..+\s+dest\.\..+\s+[0-9]{2}-[0-9]{2}-[0-9]{4}", out), (
+        f"expected space before date in: {out!r}"
+    )
 
 
 def test_incremental_stats_chunked_volume_one_full_line_with_last(capsys, tmp_path: Path, monkeypatch) -> None:
@@ -86,6 +89,7 @@ def test_incremental_stats_chunked_avoids_dest_du_rescan(tmp_path: Path, monkeyp
         archive_mode="chunked",
         bcs_dest=str(dest),
         archive_volumes=10,
+        source_size_total=100_000,
         start_timestamp=100,
         incremental_timestamp=100,
         source_size_running=2000,
@@ -98,7 +102,7 @@ def test_incremental_stats_chunked_avoids_dest_du_rescan(tmp_path: Path, monkeyp
     monkeypatch.setattr(statsmod.subprocess, "run", fail_run)
     statsmod.incremental_stats_backup("test", state, "test.000003.tar", 3)
     out = capsys.readouterr().out
-    assert "dest..1500k" in out
+    assert "dest..1.5M" in out
 
 
 def test_incremental_stats_legacy_keeps_dest_du_rescan(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -109,6 +113,7 @@ def test_incremental_stats_legacy_keeps_dest_du_rescan(tmp_path: Path, monkeypat
         archive_mode="legacy",
         bcs_dest=str(dest),
         archive_volumes=10,
+        source_size_total=500_000,
         start_timestamp=100,
         incremental_timestamp=100,
         source_size_running=2000,
@@ -121,7 +126,7 @@ def test_incremental_stats_legacy_keeps_dest_du_rescan(tmp_path: Path, monkeypat
     monkeypatch.setattr(statsmod.subprocess, "run", fake_run)
     statsmod.incremental_stats_backup("test", state, "test.tar-3", 3)
     out = capsys.readouterr().out
-    assert "dest..223k" in out
+    assert "dest..223K" in out
 
 
 def test_incremental_stats_backup_volume_cap_exceeds_estimate(capsys, tmp_path: Path, monkeypatch) -> None:
@@ -131,9 +136,10 @@ def test_incremental_stats_backup_volume_cap_exceeds_estimate(capsys, tmp_path: 
         archive_mode="chunked",
         bcs_dest=str(dest),
         archive_volumes=5,
+        source_size_total=100_000,
         start_timestamp=0,
         incremental_timestamp=0,
-        source_size_running=10_000,
+        source_size_running=90_000,
         dest_size_running=6_000,
     )
     monkeypatch.setattr(statsmod.time, "time", lambda: 300)
@@ -232,3 +238,21 @@ def test_completion_stats_legacy_still_uses_du(capsys, tmp_path: Path, monkeypat
     statsmod.completion_stats_backup(state, tar_volume=2)
     out = capsys.readouterr().out
     assert "Overall compression ratio:     50%" in out
+
+
+def test_fmt_kb_scaled() -> None:
+    assert statsmod._fmt_kb_scaled(0) == "0K"
+    assert statsmod._fmt_kb_scaled(999) == "999K"
+    assert statsmod._fmt_kb_scaled(1000) == "1M"
+    assert statsmod._fmt_kb_scaled(1024) == "1M"
+    assert statsmod._fmt_kb_scaled(1500) == "1.5M"
+    assert statsmod._fmt_kb_scaled(991_700) == "968.5M"
+
+
+def test_backup_progress_pct() -> None:
+    st = persistence.RuntimeState(source_size_total=1000, source_size_running=250)
+    assert statsmod._backup_progress_pct(st) == 25
+    st2 = persistence.RuntimeState(source_size_total=100, source_size_running=500)
+    assert statsmod._backup_progress_pct(st2) == 100
+    st3 = persistence.RuntimeState(source_size_total=0, source_size_running=100)
+    assert statsmod._backup_progress_pct(st3) == 0
