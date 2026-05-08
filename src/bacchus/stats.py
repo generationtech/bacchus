@@ -63,7 +63,7 @@ def incremental_stats_backup(
             f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%"
         )
         return
-    if state.archive_mode == "chunked" and tar_volume <= 2:
+    if state.archive_mode == "chunked":
         avg_time = elapsed_time // tar_volume if tar_volume > 0 else 0
         remain_time = avg_time * max(0, archive_volumes - tar_volume) if archive_volumes else 0
     else:

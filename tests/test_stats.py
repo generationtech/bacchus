@@ -144,6 +144,27 @@ def test_incremental_stats_backup_volume_cap_exceeds_estimate(capsys, tmp_path: 
     assert "23h" not in out
 
 
+def test_incremental_stats_chunked_avg_per_chunk_not_legacy_divisor(capsys, tmp_path: Path, monkeypatch) -> None:
+    """Chunked mode counts every shipped chunk; do not use legacy (tar_volume - 2) average divisor."""
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        archive_mode="chunked",
+        bcs_dest=str(dest),
+        archive_volumes=182,
+        start_timestamp=0,
+        incremental_timestamp=20,
+        incremental_timestamp_running=0,
+        source_size_running=10_000,
+        dest_size_running=5_000,
+    )
+    monkeypatch.setattr(statsmod.time, "time", lambda: 30)
+    statsmod.incremental_stats_backup("test", state, "test.000003.tar", 3)
+    out = capsys.readouterr().out
+    assert "avg..10s" in out
+    assert "avg..30s" not in out
+
+
 def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_path: Path, monkeypatch) -> None:
     dest = tmp_path / "dest"
     dest.mkdir()
