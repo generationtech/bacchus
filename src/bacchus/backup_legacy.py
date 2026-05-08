@@ -47,8 +47,8 @@ def run_backup(cfg: BcsConfig) -> None:
         rd_path = Path(str(tmp_prefix) + ".ramdisk")
         rd = ramdisk.Ramdisk(rd_path, size_b)
         rd.mount()
-        compressdir = rd_path
         tardir = rd_path
+        compressdir = cfg.dest.resolve() if cfg.compress else rd_path
 
     hook = Path(str(tmp_prefix) + "-nvs.sh")
     hook.write_text(f'#!/bin/sh\nexec {sys.executable} -m bacchus.volume_hook backup\n', encoding="utf-8")
@@ -87,7 +87,7 @@ def run_backup(cfg: BcsConfig) -> None:
     persistence.save(tmp_runtime, state)
 
     env = _setup_env(cfg, tmp_runtime, tmp_prefix)
-    # volume hook expects BCS_COMPRESDIR for pigz temp - align with tardir on ramdisk
+    # pigz output path; on ramdisk+compress this is ``dest`` so tmpfs is not tar+gz at once
     env["BCS_COMPRESDIR"] = str(compressdir)
     tmp_volno.write_text("1\n", encoding="utf-8")
 

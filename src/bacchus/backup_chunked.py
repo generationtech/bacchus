@@ -158,8 +158,10 @@ def run_backup(cfg: BcsConfig) -> None:
         rd_path = Path(str(tmp_prefix) + ".ramdisk")
         rd = ramdisk.Ramdisk(rd_path, size_b)
         rd.mount()
-        compressdir = rd_path
         tardir = rd_path
+        # pigz writes ``.gz`` under ``compressdir``; use ``dest`` so tmpfs only holds raw ``.tar`` /
+        # tier-3 slices (tar + gzip both on tmpfs exceeds ``size=`` for large ``-v``).
+        compressdir = dest if cfg.compress else rd_path
 
     def cleanup() -> None:
         ramdisk.cleanup_print()

@@ -41,20 +41,16 @@ class Ramdisk:
 
 def ramdisk_size_bytes(volumesize_kb: int, compress: bool, encrypt: bool) -> int:
     """
-    tmpfs size for tar/compress staging.
+    tmpfs size for tar staging when ``-r on``.
 
     Legacy bash used one ``volumesize`` slab per enabled stage (compress / encrypt) plus 1% slack.
-    When **both** are on, ``pigz`` keeps the raw ``.tar`` and growing ``.gz`` on the same filesystem
-    until compression finishes; the raw tar can exceed the nominal ``-v`` target and gzip output can
-    be large for incompressible data—so we add a **third full volume slab** for that peak (3×
-    ``volumesize_kb`` before the 1% byte slack) to avoid ENOSPC on large ``-v`` runs.
+    Python backup writes the intermediate ``.gz`` under ``-d`` (not tmpfs), so the ramdisk only holds
+    raw ``.tar`` / tier-3 slices—not ``tar`` and ``gzip`` output at once on tmpfs.
     """
     ramdisk_kb = 0
     if compress:
         ramdisk_kb += volumesize_kb
     if encrypt:
-        ramdisk_kb += volumesize_kb
-    if compress and encrypt:
         ramdisk_kb += volumesize_kb
     return (ramdisk_kb * 1024) + ((volumesize_kb * 1024) // 100)
 

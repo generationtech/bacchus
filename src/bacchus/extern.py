@@ -117,9 +117,9 @@ def pigz_compress(src: Path, dst_gz: Path) -> None:
             msg += f": {err}"
         if "No space left on device" in err or r.returncode == 28:
             msg += (
-                " (no space on the filesystem holding intermediates—often tmpfs when "
-                "`-r on`; destination `-d` free space does not apply to the ramdisk. "
-                "Try `-r off`, a smaller `-v`, or more RAM.)"
+                " (no space on the filesystem receiving the ``.gz`` or on tmpfs holding the raw "
+                "``.tar`` when ``-r on``. Free ``-d`` and RAM/swap for tmpfs; try ``-r off`` or a "
+                "smaller ``-v``.)"
             )
         raise RuntimeError(msg)
 
