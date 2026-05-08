@@ -106,8 +106,8 @@ def incremental_stats_backup(
         f"{'last..' + inc_txt:<{last_w}s}"
         f"{'avg..' + avg_txt:<{avg_w}s}"
         f"{'compr..' + cr_txt + '%':<{compr_w}s}"
-        f"{src_seg:<{state.stats_line_source_seg_w}s}"
-        f"{dst_seg:<{state.stats_line_dest_seg_w}s}"
+        f"{src_seg:<{state.stats_line_source_seg_w}s} "
+        f"{dst_seg:<{state.stats_line_dest_seg_w}s} "
         f"{time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(timestamp))}"
     )
     print(line)
@@ -165,8 +165,8 @@ def incremental_stats_restore(
         f"{'last..' + inc_txt:<{last_w}s}"
         f"{'avg..' + avg_txt:<{avg_w}s}"
         f"{'compr..' + cr_txt + '%':<{compr_w}s}"
-        f"{src_seg:<{state.stats_line_source_seg_w}s}"
-        f"{dst_seg:<{state.stats_line_dest_seg_w}s}"
+        f"{src_seg:<{state.stats_line_source_seg_w}s} "
+        f"{dst_seg:<{state.stats_line_dest_seg_w}s} "
         f"{time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(timestamp))}"
     )
     print(line)
