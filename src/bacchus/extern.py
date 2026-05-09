@@ -194,10 +194,10 @@ def tar_create_file_archive(
     verb: List[str] = ["-v"] if verbose else []
     if use_append:
         prefix: List[str] = (
-            ["tar", "--format=posix", "-r"] + verb + ["-f", str(archive_path), "-C", str(cwd), "--null", "-T"]
+            ["tar", "--format=posix", "-rp"] + verb + ["-f", str(archive_path), "-C", str(cwd), "--null", "-T"]
         )
     else:
-        prefix = ["tar", "--format=posix", "-c"] + verb + ["-f", str(archive_path), "-C", str(cwd), "--null", "-T"]
+        prefix = ["tar", "--format=posix", "-cp"] + verb + ["-f", str(archive_path), "-C", str(cwd), "--null", "-T"]
     _run_tar_with_files_from(prefix, paths_relative_to_cwd, archive_path.parent)
 
 
@@ -212,7 +212,7 @@ def tar_create_archive(
         return
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     prefix: List[str] = (
-        ["tar", "--format=posix", "-c"] + (["-v"] if verbose else []) + ["-f", str(archive_path), "-C", str(cwd), "--null", "-T"]
+        ["tar", "--format=posix", "-cp"] + (["-v"] if verbose else []) + ["-f", str(archive_path), "-C", str(cwd), "--null", "-T"]
     )
     _run_tar_with_files_from(prefix, paths_relative_to_cwd, archive_path.parent)
 

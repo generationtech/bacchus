@@ -31,6 +31,7 @@ def test_tar_create_archive_uses_null_files_from_not_argv(tmp_path: Path, monkey
     extern.tar_create_archive(paths, archive, cwd, verbose=False)
     assert len(captured) == 1
     cmd = captured[0]
+    assert "-cp" in cmd
     assert "--null" in cmd
     assert "-T" in cmd
     t_idx = cmd.index("-T")
@@ -54,7 +55,7 @@ def test_tar_create_file_archive_uses_null_files_from_not_argv(tmp_path: Path, m
     extern.tar_create_file_archive(paths, archive, cwd, append=False, verbose=True)
     assert len(captured) == 1
     cmd = captured[0]
-    assert "-c" in cmd
+    assert "-cp" in cmd
     assert "-v" in cmd
     assert "--null" in cmd and "-T" in cmd
     assert cmd[-1].endswith(".lst")
