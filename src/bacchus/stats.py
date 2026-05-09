@@ -106,6 +106,7 @@ def incremental_stats_backup(
     tar_archive: str,
     tar_volume: int,
     *,
+    tier3_mv_group: int | None = None,
     tier3_inner_mv_vol: int | None = None,
 ) -> None:
     archive_volumes = state.archive_volumes
@@ -116,9 +117,13 @@ def incremental_stats_backup(
         volume_cap = max(archive_volumes, tar_volume) if archive_volumes else tar_volume
     archive_max_name = len(basename) + len(str(volume_cap)) + 6
     archive_max_num = len(str(volume_cap)) + 1
-    mv_suffix = (
-        f" [MV {tier3_inner_mv_vol}]" if tier3_inner_mv_vol is not None else ""
-    )
+    if tier3_inner_mv_vol is not None:
+        if tier3_mv_group is not None:
+            mv_suffix = f" [L{tier3_mv_group} MV {tier3_inner_mv_vol}]"
+        else:
+            mv_suffix = f" [MV {tier3_inner_mv_vol}]"
+    else:
+        mv_suffix = ""
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
     # Legacy tar -cM skips full stats for the first two volumes; chunked mode prints full lines from chunk 1.

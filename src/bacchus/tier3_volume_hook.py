@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from bacchus import persistence, stats as statsmod
+from bacchus.backup_chunked import _mini_tar_volume
 from bacchus.pipeline import du_sk_apparent, ship_raw_tar
 
 
@@ -37,6 +38,8 @@ def main() -> None:
     tar_base = Path(tar_archive).name
     tararchivedir = Path(tar_archive).parent
     raw_path = tararchivedir / tar_base
+    slice_idx = _mini_tar_volume(tar_base) or 1
+    mv_group = int(st.get("mv_group", 1))
 
     rt = persistence.load(datafile)
     rt.source_size_running += du_sk_apparent(raw_path)
@@ -51,7 +54,12 @@ def main() -> None:
     if st.get("statistics"):
         if st.get("runstatistics"):
             statsmod.incremental_stats_backup(
-                basename, rt, member, chunk_seq, tier3_inner_mv_vol=tar_volume
+                basename,
+                rt,
+                member,
+                chunk_seq,
+                tier3_mv_group=mv_group,
+                tier3_inner_mv_vol=slice_idx,
             )
         else:
             print(member)

@@ -85,6 +85,7 @@ def _emit_chunked_ship_progress(
     member: str,
     chunk_vol: int,
     *,
+    tier3_mv_group: int | None = None,
     tier3_inner_mv_vol: int | None = None,
 ) -> None:
     """Per-chunk line when ``-S on``; full incremental when ``-S on -W on`` (legacy-style)."""
@@ -93,7 +94,12 @@ def _emit_chunked_ship_progress(
     state = persistence.load(datafile)
     if cfg.runstatistics:
         statsmod.incremental_stats_backup(
-            cfg.basename, state, member, chunk_vol, tier3_inner_mv_vol=tier3_inner_mv_vol
+            cfg.basename,
+            state,
+            member,
+            chunk_vol,
+            tier3_mv_group=tier3_mv_group,
+            tier3_inner_mv_vol=tier3_inner_mv_vol,
         )
         persistence.save(datafile, state)
     else:
@@ -112,6 +118,10 @@ def _tier3(
     chunk_index: int,
 ) -> int:
     tier3_state = Path(str(tmp_prefix) + ".tier3.json")
+    rt = persistence.load(datafile)
+    rt.tier3_large_file_count += 1
+    mv_group = rt.tier3_large_file_count
+    persistence.save(datafile, rt)
     tier3_state.write_text(
         json.dumps(
             {
@@ -123,13 +133,11 @@ def _tier3(
                 "compressdir": str(compressdir),
                 "statistics": cfg.statistics,
                 "runstatistics": cfg.runstatistics,
+                "mv_group": mv_group,
             }
         ),
         encoding="utf-8",
     )
-    rt = persistence.load(datafile)
-    rt.tier3_large_file_count += 1
-    persistence.save(datafile, rt)
     hook = Path(str(tmp_prefix) + "-tier3-nvs.sh")
     hook.write_text(f'#!/bin/sh\nexec {sys.executable} -m bacchus.tier3_volume_hook\n', encoding="utf-8")
     os.chmod(hook, 0o755)
@@ -165,7 +173,15 @@ def _tier3(
         st["chunk_seq"] = seq + 1
         tier3_state.write_text(json.dumps(st), encoding="utf-8")
         persistence.save(datafile, rt)
-        _emit_chunked_ship_progress(cfg, datafile, member, seq, tier3_inner_mv_vol=inner_mv)
+        lf_group = int(st.get("mv_group", 1))
+        _emit_chunked_ship_progress(
+            cfg,
+            datafile,
+            member,
+            seq,
+            tier3_mv_group=lf_group,
+            tier3_inner_mv_vol=inner_mv,
+        )
         rt = persistence.load(datafile)
         rt.incremental_timestamp = int(time.time())
         rt.incremental_timestamp_running = 0

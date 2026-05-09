@@ -253,12 +253,12 @@ def test_incremental_stats_backup_tier3_shows_inner_mv_volume(capsys, tmp_path: 
     )
     monkeypatch.setattr(statsmod.time, "time", lambda: 500)
     statsmod.incremental_stats_backup(
-        "test", state, "test.000005.tar", 5, tier3_inner_mv_vol=3
+        "test", state, "test.000005.tar", 5, tier3_mv_group=1, tier3_inner_mv_vol=3
     )
     out = capsys.readouterr().out
-    assert "[MV 3]" in out
-    assert "test.000005.tar [MV 3]" not in out
-    assert re.search(r"\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2} \[MV 3\]", out)
+    assert "[L1 MV 3]" in out
+    assert "test.000005.tar [L" not in out
+    assert re.search(r"\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2} \[L1 MV 3\]", out)
 
 
 def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_path: Path, monkeypatch) -> None:
