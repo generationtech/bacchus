@@ -83,25 +83,60 @@ def run_restore(cfg: BcsConfig) -> None:
     peak_intermediate_kb: int | None = None
     tmpfs_size_bytes: int | None = None
 
-    if cfg.ramdisk and (compress or password):
-        scratch_peak = Path(tempfile.mkdtemp(prefix="bacchus-peak-", dir="/tmp"))
-        try:
-            peak_intermediate_kb = restore_sizing.max_restore_peak_kb(
-                paths,
-                cfg.basename,
+    if compress or password:
+        largest_art, probe_member = restore_sizing.largest_chunk_artifact(
+            paths, cfg.basename, bcs_source, compress=compress, password=password
+        )
+
+        if cfg.ramdisk:
+            largest_bytes = largest_art.stat().st_size
+            probe_bytes = max(largest_bytes * 3, 1024 * 1024)
+            probe_mp = Path(str(tmp_prefix) + ".probe_ramdisk")
+            probe_rd = ramdisk.Ramdisk(probe_mp, probe_bytes)
+            probe_rd.mount()
+            try:
+                decoded_probe, _, _ = process_volume_restore(
+                    bcs_source,
+                    probe_member,
+                    probe_mp,
+                    probe_mp,
+                    compress=compress,
+                    password=password,
+                )
+                decoded_probe.unlink(missing_ok=True)
+            finally:
+                probe_rd.umount()
+
+        else:
+            decoded_probe, _, _ = process_volume_restore(
                 bcs_source,
+                probe_member,
+                decryptdir,
+                compressdir,
                 compress=compress,
                 password=password,
-                scratch=scratch_peak,
             )
-            tmpfs_size_bytes = restore_sizing.restore_ramdisk_size_bytes(peak_intermediate_kb)
+            decoded_probe.unlink(missing_ok=True)
+
+        scratch_peak = Path(tempfile.mkdtemp(prefix="bacchus-peak-", dir="/tmp"))
+        try:
+            peak_intermediate_kb = restore_sizing.restore_intermediate_peak_kb(
+                largest_art,
+                probe_member,
+                scratch_peak,
+                compress=compress,
+                password=password,
+            )
         finally:
             subprocess.run(["rm", "-rf", str(scratch_peak)], check=False)
-        rd_path = Path(str(tmp_prefix) + ".ramdisk")
-        rd = ramdisk.Ramdisk(rd_path, tmpfs_size_bytes)
-        rd.mount()
-        decryptdir = rd_path
-        compressdir = rd_path
+
+        if cfg.ramdisk:
+            tmpfs_size_bytes = restore_sizing.restore_ramdisk_size_bytes(peak_intermediate_kb)
+            rd_path = Path(str(tmp_prefix) + ".ramdisk")
+            rd = ramdisk.Ramdisk(rd_path, tmpfs_size_bytes)
+            rd.mount()
+            decryptdir = rd_path
+            compressdir = rd_path
 
     def cleanup() -> None:
         ramdisk.cleanup_print()

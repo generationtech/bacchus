@@ -17,6 +17,37 @@ def chunk_member_name(path: Path, basename: str) -> str:
     return m.group(1)
 
 
+def largest_chunk_artifact(
+    chunk_paths: list[Path],
+    basename: str,
+    src_dir: Path,
+    *,
+    compress: bool,
+    password: str,
+) -> tuple[Path, str]:
+    """
+    Chunk artifact with greatest on-disk ``st_size`` among ``chunk_paths``.
+
+    Tie-break: lexicographically smallest path string for determinism.
+    """
+    best_art: Path | None = None
+    best_member: str | None = None
+    best_sz = -1
+    for p in chunk_paths:
+        member = chunk_member_name(p, basename)
+        artifact = _artifact_path(src_dir, member, compress, password)
+        if not artifact.is_file():
+            raise FileNotFoundError(f"Missing chunk artifact for sizing: {artifact}")
+        sz = artifact.stat().st_size
+        if best_art is None:
+            best_art, best_member, best_sz = artifact, member, sz
+            continue
+        if sz > best_sz or (sz == best_sz and str(artifact) < str(best_art)):
+            best_art, best_member, best_sz = artifact, member, sz
+    assert best_art is not None and best_member is not None
+    return best_art, best_member
+
+
 def _artifact_path(src_dir: Path, member: str, compress: bool, password: str) -> Path:
     p = src_dir / member
     if compress:
@@ -76,28 +107,6 @@ def restore_intermediate_peak_kb(
         return peak_kb
 
     raise ValueError("restore_intermediate_peak_kb expects compress or password")
-
-
-def max_restore_peak_kb(
-    chunk_paths: list[Path],
-    basename: str,
-    src_dir: Path,
-    *,
-    compress: bool,
-    password: str,
-    scratch: Path,
-) -> int:
-    """Maximum intermediate peak over chunks (same ordering as restore)."""
-    max_kb = 0
-    for p in chunk_paths:
-        member = chunk_member_name(p, basename)
-        artifact = _artifact_path(src_dir, member, compress, password)
-        if not artifact.is_file():
-            raise FileNotFoundError(f"Missing chunk artifact for sizing: {artifact}")
-        peak = restore_intermediate_peak_kb(artifact, member, scratch, compress=compress, password=password)
-        if peak > max_kb:
-            max_kb = peak
-    return max_kb
 
 
 def restore_ramdisk_size_bytes(peak_kb: int) -> int:

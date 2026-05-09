@@ -42,12 +42,10 @@ def test_restore_intermediate_peak_kb_compress_only(tmp_path: Path) -> None:
     assert peak == gz_kb + uncomp_kb
 
 
-def test_max_restore_peak_kb_takes_max(tmp_path: Path) -> None:
+def test_largest_chunk_artifact_by_size(tmp_path: Path) -> None:
     basename = "demo"
     src = tmp_path / "src"
-    scratch = tmp_path / "scratch"
     src.mkdir()
-    scratch.mkdir()
 
     small_raw = b"a" * 100
     big_raw = b"b" * 8000
@@ -56,12 +54,21 @@ def test_max_restore_peak_kb_takes_max(tmp_path: Path) -> None:
         (src / f"{member}.gz").write_bytes(gzip.compress(raw))
 
     paths = [src / f"{basename}.000001.tar.gz", src / f"{basename}.000002.tar.gz"]
-    m = restore_sizing.max_restore_peak_kb(paths, basename, src, compress=True, password="", scratch=scratch)
+    art, member = restore_sizing.largest_chunk_artifact(paths, basename, src, compress=True, password="")
+    assert member == f"{basename}.000002.tar"
+    assert art == src / f"{basename}.000002.tar.gz"
 
-    p1 = restore_sizing.restore_intermediate_peak_kb(
-        src / f"{basename}.000001.tar.gz", f"{basename}.000001.tar", scratch, compress=True, password=""
-    )
-    p2 = restore_sizing.restore_intermediate_peak_kb(
-        src / f"{basename}.000002.tar.gz", f"{basename}.000002.tar", scratch, compress=True, password=""
-    )
-    assert m == max(p1, p2)
+
+def test_largest_chunk_artifact_tie_lexicographic(tmp_path: Path) -> None:
+    basename = "demo"
+    src = tmp_path / "src"
+    src.mkdir()
+    raw = gzip.compress(b"x")
+    for idx in (1, 2):
+        member = f"{basename}.{idx:06d}.tar"
+        (src / f"{member}.gz").write_bytes(raw)
+
+    paths = [src / f"{basename}.000002.tar.gz", src / f"{basename}.000001.tar.gz"]
+    art, member = restore_sizing.largest_chunk_artifact(paths, basename, src, compress=True, password="")
+    assert member == f"{basename}.000001.tar"
+    assert art == src / f"{basename}.000001.tar.gz"
