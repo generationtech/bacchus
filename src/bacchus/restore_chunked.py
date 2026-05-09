@@ -9,7 +9,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from bacchus import extern, persistence, ramdisk
+from bacchus import extern, persistence, ramdisk, restore_sizing
 from bacchus.classify import TarSegmentKind, classify_tar_segment
 from bacchus.config import BcsConfig
 from bacchus.pipeline import process_volume_restore
@@ -17,10 +17,7 @@ from bacchus import stats as statsmod
 
 
 def _chunk_member_name(path: Path, basename: str) -> str:
-    m = re.match(rf"^({re.escape(basename)}\.\d{{6}}\.tar)", path.name)
-    if not m:
-        raise ValueError(f"Not a chunked archive file: {path.name}")
-    return m.group(1)
+    return restore_sizing.chunk_member_name(path, basename)
 
 
 def _list_chunks(source: Path, basename: str) -> list[Path]:
@@ -78,22 +75,30 @@ def run_restore(cfg: BcsConfig) -> None:
     decryptdir = cfg.decryptdir.resolve()
     compressdir = cfg.compressdir.resolve()
 
+    archive_volumes = len(all_chunks)
+    source_size_total = int(
+        subprocess.check_output(["du", "-sk", "--apparent-size", str(bcs_source)], text=True).split()[0]
+    )
+
+    peak_intermediate_kb: int | None = None
+    tmpfs_size_bytes: int | None = None
+
     if cfg.ramdisk and (compress or password):
-        ramdisk_size_tmpdir = Path(str(tmp_prefix) + ".ramdisk_size")
-        ramdisk_size_tmpdir.mkdir()
-        first_member = _chunk_member_name(paths[0], cfg.basename)
-        _, _, vs = process_volume_restore(
-            bcs_source,
-            first_member,
-            ramdisk_size_tmpdir,
-            ramdisk_size_tmpdir,
-            compress=compress,
-            password=password,
-        )
-        subprocess.run(["rm", "-rf", str(ramdisk_size_tmpdir)], check=False)
-        size_b = ramdisk.ramdisk_size_bytes(vs, compress, bool(password))
+        scratch_peak = Path(tempfile.mkdtemp(prefix="bacchus-peak-", dir="/tmp"))
+        try:
+            peak_intermediate_kb = restore_sizing.max_restore_peak_kb(
+                paths,
+                cfg.basename,
+                bcs_source,
+                compress=compress,
+                password=password,
+                scratch=scratch_peak,
+            )
+            tmpfs_size_bytes = restore_sizing.restore_ramdisk_size_bytes(peak_intermediate_kb)
+        finally:
+            subprocess.run(["rm", "-rf", str(scratch_peak)], check=False)
         rd_path = Path(str(tmp_prefix) + ".ramdisk")
-        rd = ramdisk.Ramdisk(rd_path, size_b)
+        rd = ramdisk.Ramdisk(rd_path, tmpfs_size_bytes)
         rd.mount()
         decryptdir = rd_path
         compressdir = rd_path
@@ -107,15 +112,16 @@ def run_restore(cfg: BcsConfig) -> None:
 
     atexit.register(cleanup)
 
-    archive_volumes = len(all_chunks)
-    source_size_total = int(
-        subprocess.check_output(["du", "-sk", "--apparent-size", str(bcs_source)], text=True).split()[0]
-    )
-
     if cfg.estimate:
-        vs = cfg.volumesize_kb
-        est = max(archive_volumes, source_size_total // max(vs, 1))
-        statsmod.print_estimate(vs, est, source_size_total, vs)
+        statsmod.print_estimate_chunked_restore(
+            chunks_on_disk=archive_volumes,
+            chunks_this_run=len(paths),
+            start_chunk=start,
+            source_size_total_kb=source_size_total,
+            ramdisk_planned=bool(cfg.ramdisk and (compress or password)),
+            peak_intermediate_kb=peak_intermediate_kb,
+            tmpfs_size_bytes=tmpfs_size_bytes,
+        )
     print()
 
     ts = int(time.time())

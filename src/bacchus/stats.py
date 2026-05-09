@@ -361,6 +361,29 @@ def compute_end(
         return dest_actual
 
 
+def print_estimate_chunked_restore(
+    *,
+    chunks_on_disk: int,
+    chunks_this_run: int,
+    start_chunk: int,
+    source_size_total_kb: int,
+    ramdisk_planned: bool,
+    peak_intermediate_kb: int | None,
+    tmpfs_size_bytes: int | None,
+) -> None:
+    """Pre-run summary for manifestless chunked restore (no legacy volume-size math)."""
+    print(f"\nArchive chunks on disk:          {chunks_on_disk}")
+    print(f"Archive chunks (this run):       {chunks_this_run}")
+    if start_chunk > 1:
+        print(f"Starting at chunk number:        {start_chunk}")
+    print(f"Total size of archive directory: {_fmt_int(source_size_total_kb)}k")
+    print("(encrypted/compressed payload on disk; restored size unknown until complete)")
+    if ramdisk_planned and peak_intermediate_kb is not None and tmpfs_size_bytes is not None:
+        tmpfs_kb = tmpfs_size_bytes // 1024
+        print(f"Peak intermediate (worst chunk): {_fmt_int(peak_intermediate_kb)}k")
+        print(f"Planned tmpfs size:              {_fmt_kb_scaled(tmpfs_kb)}")
+
+
 def print_estimate(
     volumesize_kb: int,
     archive_volumes: int,
