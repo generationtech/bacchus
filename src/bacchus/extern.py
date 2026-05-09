@@ -282,7 +282,13 @@ sys.exit(0)
 
 
 def tar_extract_multivolume_buffered(slices: List[Path], dest: Path, verbose: bool) -> None:
-    """Extract one GNU multi-volume group from decoded plain-tar slice files."""
+    """
+    Extract one GNU multi-volume group from decoded plain-tar slice files.
+
+    Must match :func:`tar_create_multivolume_single_member`: inner ``tar -cM`` omits ``--format=posix``
+    so GNU ``M`` continuations apply; ``tar -xM`` here omits it too, otherwise volume offsets can fail
+    with ``This volume is out of sequence``.
+    """
     if not slices:
         raise ValueError("no slices")
     dest.mkdir(parents=True, exist_ok=True)
@@ -298,8 +304,6 @@ def tar_extract_multivolume_buffered(slices: List[Path], dest: Path, verbose: bo
         else:
             args += ["-xpM"]
         args += [
-            "--format",
-            "posix",
             "--new-volume-script",
             str(nvs),
             "--volno-file",
