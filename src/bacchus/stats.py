@@ -216,10 +216,20 @@ def incremental_stats_restore(
     state: "persistence.RuntimeState",
     filename: str,
     tar_volume: int,
+    *,
+    tier3_mv_group: int | None = None,
+    tier3_inner_mv_vol: int | None = None,
 ) -> None:
     archive_volumes = state.archive_volumes
     archive_max_name = len(basename) + len(str(archive_volumes)) + 6
     archive_max_num = len(str(archive_volumes)) + 1
+    if tier3_inner_mv_vol is not None:
+        if tier3_mv_group is not None:
+            mv_suffix = f" [L{tier3_mv_group} MV {tier3_inner_mv_vol}]"
+        else:
+            mv_suffix = f" [MV {tier3_inner_mv_vol}]"
+    else:
+        mv_suffix = ""
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
     pct = (tar_volume * 100) // archive_volumes if archive_volumes else 0
@@ -279,7 +289,7 @@ def incremental_stats_restore(
         f"{'compr..' + cr_txt + '%':<{compr_w}s}"
         f"{src_seg:<{state.stats_line_source_seg_w}s} "
         f"{dst_seg:<{state.stats_line_dest_seg_w}s} "
-        f"{time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(timestamp))}"
+        f"{time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(timestamp))}{mv_suffix}"
     )
     print(line)
 

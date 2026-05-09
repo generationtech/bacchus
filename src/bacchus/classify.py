@@ -29,6 +29,9 @@ def classify_tar_segment(path: Path) -> TarSegmentKind:
     - GNU multi-volume continuation volumes start with typeflag 'M' (GNUTYPE_MULTIVOL)
       at byte index 156 of the first tar record.
     - First volume of a multi-volume split has a normal header and no zero trailer until the last slice.
+
+    The last slice of an inner GNU ``tar -cM`` stream may still present as ``STANDALONE`` here while
+    extraction requires earlier slices; chunked restore treats that when an MV buffer is already open.
     """
     size = path.stat().st_size
     if size < BLOCK:

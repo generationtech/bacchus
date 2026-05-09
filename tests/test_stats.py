@@ -102,6 +102,29 @@ def test_incremental_stats_restore_volume_one_shows_remain(capsys, monkeypatch) 
     assert "remain..15m" in out
 
 
+def test_incremental_stats_restore_tier3_suffix(capsys, monkeypatch) -> None:
+    monkeypatch.setattr(statsmod.time, "time", lambda: 1_500)
+    state = persistence.RuntimeState(
+        archive_volumes=10,
+        start_timestamp=1_000,
+        incremental_timestamp=1_400,
+        incremental_timestamp_running=0,
+        source_size_total=100_000,
+        source_size_running=10_000,
+        dest_size_running=9_000,
+    )
+    statsmod.incremental_stats_restore(
+        "test",
+        state,
+        "test.000017.tar",
+        17,
+        tier3_mv_group=2,
+        tier3_inner_mv_vol=4,
+    )
+    out = capsys.readouterr().out
+    assert "[L2 MV 4]" in out
+
+
 def test_incremental_stats_restore_last_reflects_incremental_timestamp(capsys, monkeypatch) -> None:
     clock = [1_200]
 

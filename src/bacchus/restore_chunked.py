@@ -174,6 +174,7 @@ def run_restore(cfg: BcsConfig) -> None:
     )
 
     mv_buf: list[Path] = []
+    inner_mv_group = 0
 
     for vol_idx, p in enumerate(paths, start=1):
         member = _chunk_member_name(p, cfg.basename)
@@ -192,6 +193,13 @@ def run_restore(cfg: BcsConfig) -> None:
             password=password,
         )
         kind = classify_tar_segment(decoded)
+        # Inner Tier-3 ``tar -cM`` last slice often looks like standalone (ustar trailer) but still
+        # needs earlier slices for ``tar -xM``; once mv_buf is open, finish the group here.
+        if mv_buf and kind == TarSegmentKind.STANDALONE:
+            kind = TarSegmentKind.MV_END
+
+        tier3_g: int | None = None
+        tier3_v: int | None = None
 
         if kind == TarSegmentKind.STANDALONE:
             if mv_buf:
@@ -204,7 +212,10 @@ def run_restore(cfg: BcsConfig) -> None:
         elif kind == TarSegmentKind.MV_START:
             if mv_buf:
                 raise SystemExit("Invalid layout: MV_START while a group is already open.")
+            inner_mv_group += 1
             mv_buf.append(decoded)
+            tier3_g = inner_mv_group
+            tier3_v = len(mv_buf)
         elif kind in (TarSegmentKind.MV_MIDDLE, TarSegmentKind.MV_END):
             if not mv_buf:
                 raise SystemExit(
@@ -212,6 +223,8 @@ def run_restore(cfg: BcsConfig) -> None:
                     "Choose a smaller --start-chunk that begins at MV_START."
                 )
             mv_buf.append(decoded)
+            tier3_g = inner_mv_group
+            tier3_v = len(mv_buf)
             if kind == TarSegmentKind.MV_END:
                 extern.tar_extract_multivolume_buffered(mv_buf, cfg.dest.resolve(), cfg.verbosetar)
                 for x in mv_buf:
@@ -226,7 +239,14 @@ def run_restore(cfg: BcsConfig) -> None:
 
         if cfg.statistics:
             if cfg.runstatistics:
-                statsmod.incremental_stats_restore(cfg.basename, st, member, vol_idx)
+                statsmod.incremental_stats_restore(
+                    cfg.basename,
+                    st,
+                    member,
+                    vol_idx,
+                    tier3_mv_group=tier3_g,
+                    tier3_inner_mv_vol=tier3_v,
+                )
             else:
                 print(member)
 
