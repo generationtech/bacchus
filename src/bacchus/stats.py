@@ -114,11 +114,11 @@ def incremental_stats_backup(
         volume_cap = _chunked_volume_total_display(state, tar_volume)
     else:
         volume_cap = max(archive_volumes, tar_volume) if archive_volumes else tar_volume
-    archive_label = (
-        f"{tar_archive} [MV {tier3_inner_mv_vol}]" if tier3_inner_mv_vol is not None else tar_archive
-    )
-    archive_max_name = max(len(basename) + len(str(volume_cap)) + 6, len(archive_label))
+    archive_max_name = len(basename) + len(str(volume_cap)) + 6
     archive_max_num = len(str(volume_cap)) + 1
+    mv_suffix = (
+        f" [MV {tier3_inner_mv_vol}]" if tier3_inner_mv_vol is not None else ""
+    )
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
     # Legacy tar -cM skips full stats for the first two volumes; chunked mode prints full lines from chunk 1.
@@ -127,7 +127,7 @@ def incremental_stats_backup(
     )
     if short_line:
         print(
-            f"{archive_label:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%"
+            f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%{mv_suffix}"
         )
         return
     if state.archive_mode == "chunked":
@@ -191,8 +191,9 @@ def incremental_stats_backup(
     state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
+    date_s = time.strftime("%m-%d-%Y %H:%M:%S", time.localtime(timestamp))
     line = (
-        f"{archive_label:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%  "
+        f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%  "
         f"{'remain..' + rem_txt:<{remain_w}s}"
         f"{'elapsed..' + el_txt:<{elapsed_w}s}"
         f"{'last..' + inc_txt:<{last_w}s}"
@@ -200,7 +201,7 @@ def incremental_stats_backup(
         f"{'compr..' + cr_txt + '%':<{compr_w}s}"
         f"{src_seg:<{state.stats_line_source_seg_w}s} "
         f"{dst_seg:<{state.stats_line_dest_seg_w}s} "
-        f"{time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(timestamp))}"
+        f"{date_s}{mv_suffix}"
     )
     print(line)
 
@@ -283,19 +284,25 @@ def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) 
         )
         dest_size_running = state.dest_size_running + int(du.stdout.strip().splitlines()[-1].split()[0])
     comp_ratio = 100 - ((dest_size_running * 100) // state.source_size_total) if state.source_size_total else 0
+    _SUMMARY_W = 34
+
+    def _summary_line(label: str, value: str) -> None:
+        print(f"{label:<{_SUMMARY_W}}{value}")
+
     print("\nBACKUP OPERATION COMPLETE")
-    print(f"Total runtime:                 {duration_readable(completion_time)}")
-    print(f"Average time per archive file: {duration_readable(avg_time)}")
-    print(f"Number of archive files:       {tar_volume - 1}")
+    _summary_line("Destination:", str(bcs_dest))
+    _summary_line("Total runtime:", duration_readable(completion_time))
+    _summary_line("Average time per archive file:", duration_readable(avg_time))
+    _summary_line("Number of archive files:", str(tar_volume - 1))
     if state.archive_mode == "chunked":
-        print(f"Large files (inner multi-volume tar): {state.tier3_large_file_count}")
-    print(f"Tar overhead:                  {_fmt_kb_scaled(tar_overhead)}")
-    print(f"Total size of backup:          {_fmt_kb_scaled(state.source_size_total)}")
+        _summary_line("Large files (MV):", str(state.tier3_large_file_count))
+    _summary_line("Tar overhead:", _fmt_kb_scaled(tar_overhead))
+    _summary_line("Total size of backup:", _fmt_kb_scaled(state.source_size_total))
     if dest_size_running:
-        print(f"Total size of destinations:    {_fmt_kb_scaled(dest_size_running)}")
+        _summary_line("Total size of destinations:", _fmt_kb_scaled(dest_size_running))
     else:
-        print(f"Total size of destination:     {_fmt_kb_scaled(dest_size_running)}")
-    print(f"Overall compression ratio:     {comp_ratio}%")
+        _summary_line("Total size of destination:", _fmt_kb_scaled(dest_size_running))
+    _summary_line("Overall compression ratio:", f"{comp_ratio}%")
 
 
 def completion_stats_restore(state: "persistence.RuntimeState", archive_volumes: int, bcs_dest: Path) -> None:

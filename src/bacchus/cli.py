@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from bacchus import backup_chunked, backup_legacy, restore_chunked, restore_legacy
+from bacchus import stats as statsmod
 from bacchus.config import BcsConfig
 from bacchus import modes
 
@@ -258,17 +259,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Intermediate tar directory:          {cfg.tardir}")
         _BACKUP_OPT_COL = 37
         print(
-            f"{'Volume size for archive:':<{_BACKUP_OPT_COL}}"
-            f"{cfg.volumesize_kb:,}k".replace(",", "")
+            f"{'Volume size for archive (KiB):':<{_BACKUP_OPT_COL}}"
+            f"{statsmod._fmt_kb_scaled(cfg.volumesize_kb)}"
         )
         if cfg.archive_mode == "chunked":
             print(
-                f"{'Absolute max chunk (kB):':<{_BACKUP_OPT_COL}}"
-                f"{cfg.resolved_absolute_max_kb():,}".replace(",", "")
+                f"{'Absolute max chunk (KiB):':<{_BACKUP_OPT_COL}}"
+                f"{statsmod._fmt_kb_scaled(cfg.resolved_absolute_max_kb())}"
             )
             print(
-                f"{'Mini MV slice (kB):':<{_BACKUP_OPT_COL}}"
-                f"{cfg.resolved_mini_slice_kb():,}".replace(",", "")
+                f"{'Mini MV slice (KiB):':<{_BACKUP_OPT_COL}}"
+                f"{statsmod._fmt_kb_scaled(cfg.resolved_mini_slice_kb())}"
             )
             scope = cfg.archive_path_scope
             top = (cfg.archive_top_dir or "").strip()

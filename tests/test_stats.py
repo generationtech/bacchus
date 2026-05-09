@@ -257,7 +257,8 @@ def test_incremental_stats_backup_tier3_shows_inner_mv_volume(capsys, tmp_path: 
     )
     out = capsys.readouterr().out
     assert "[MV 3]" in out
-    assert "test.000005.tar [MV 3]" in out
+    assert "test.000005.tar [MV 3]" not in out
+    assert re.search(r"\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2} \[MV 3\]", out)
 
 
 def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_path: Path, monkeypatch) -> None:
@@ -279,9 +280,13 @@ def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_pa
     monkeypatch.setattr(statsmod.subprocess, "run", boom_run)
     statsmod.completion_stats_backup(state, tar_volume=2)
     out = capsys.readouterr().out
-    assert "Overall compression ratio:     50%" in out
-    assert "Total size of destinations:    100K" in out
-    assert "Large files (inner multi-volume tar): 0" in out
+    assert "Destination:" in out
+    assert str(dest) in out
+    assert "Overall compression ratio:" in out
+    assert re.search(r"Overall compression ratio:\s+50%", out)
+    assert "Total size of destinations:" in out
+    assert "100K" in out
+    assert re.search(r"Large files \(MV\):\s+0", out)
 
 
 def test_completion_stats_chunked_large_file_count_nonzero(capsys, tmp_path: Path, monkeypatch) -> None:
@@ -303,7 +308,7 @@ def test_completion_stats_chunked_large_file_count_nonzero(capsys, tmp_path: Pat
     monkeypatch.setattr(statsmod.subprocess, "run", boom_run)
     statsmod.completion_stats_backup(state, tar_volume=2)
     out = capsys.readouterr().out
-    assert "Large files (inner multi-volume tar): 4" in out
+    assert re.search(r"Large files \(MV\):\s+4", out)
 
 
 def test_completion_stats_chunked_total_runtime_uses_wall_clock(capsys, tmp_path: Path, monkeypatch) -> None:
@@ -327,7 +332,7 @@ def test_completion_stats_chunked_total_runtime_uses_wall_clock(capsys, tmp_path
     monkeypatch.setattr(statsmod.subprocess, "run", boom_run)
     statsmod.completion_stats_backup(state, tar_volume=2)
     out = capsys.readouterr().out
-    assert "Total runtime:                 5m" in out
+    assert re.search(r"Total runtime:\s+5m", out)
 
 
 def test_completion_stats_legacy_still_uses_du(capsys, tmp_path: Path, monkeypatch) -> None:
@@ -349,7 +354,10 @@ def test_completion_stats_legacy_still_uses_du(capsys, tmp_path: Path, monkeypat
     monkeypatch.setattr(statsmod.subprocess, "run", fake_run)
     statsmod.completion_stats_backup(state, tar_volume=2)
     out = capsys.readouterr().out
-    assert "Overall compression ratio:     50%" in out
+    assert "Destination:" in out
+    assert str(dest) in out
+    assert "Overall compression ratio:" in out
+    assert re.search(r"Overall compression ratio:\s+50%", out)
 
 
 def test_fmt_kb_scaled() -> None:
