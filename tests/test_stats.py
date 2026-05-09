@@ -67,19 +67,68 @@ def test_incremental_stats_legacy_volume_one_short_only(capsys, tmp_path: Path) 
     assert "0%" in out
 
 
-def test_incremental_stats_restore_line_has_spaces(capsys) -> None:
+def test_incremental_stats_restore_line_has_spaces(capsys, monkeypatch) -> None:
+    monkeypatch.setattr(statsmod.time, "time", lambda: 1_060)
     state = persistence.RuntimeState(
         bcs_dest="/tmp",
         archive_volumes=10,
         start_timestamp=1_000,
-        incremental_timestamp=1_000,
+        incremental_timestamp=1_030,
+        incremental_timestamp_running=0,
+        source_size_total=50_000,
         source_size_running=100,
         dest_size_running=200,
     )
     statsmod.incremental_stats_restore("test", state, "test.000003.tar", 3)
     out = capsys.readouterr().out.strip()
-    assert re.search(r"\d+k dest\.\.", out), f"expected space before dest.. in: {out!r}"
-    assert re.search(r"\d+k [0-9]{2}-[0-9]{2}-[0-9]{4}", out), f"expected space before date in: {out!r}"
+    assert re.search(r"source\.\.\S+\s+dest\.\.\S+\s+[0-9]{2}-[0-9]{2}", out), (
+        f"expected scaled source/dest and space before date in: {out!r}"
+    )
+
+
+def test_incremental_stats_restore_volume_one_shows_remain(capsys, monkeypatch) -> None:
+    monkeypatch.setattr(statsmod.time, "time", lambda: 1_100)
+    state = persistence.RuntimeState(
+        archive_volumes=10,
+        start_timestamp=1_000,
+        incremental_timestamp=1_000,
+        incremental_timestamp_running=0,
+        source_size_total=100_000,
+        source_size_running=5_000,
+        dest_size_running=4_000,
+    )
+    statsmod.incremental_stats_restore("test", state, "test.000001.tar", 1)
+    out = capsys.readouterr().out
+    assert "remain..15m" in out
+
+
+def test_incremental_stats_restore_last_reflects_incremental_timestamp(capsys, monkeypatch) -> None:
+    clock = [1_200]
+
+    def bump_clock() -> int:
+        return clock[0]
+
+    monkeypatch.setattr(statsmod.time, "time", bump_clock)
+    state = persistence.RuntimeState(
+        archive_volumes=10,
+        start_timestamp=1_000,
+        incremental_timestamp=1_150,
+        incremental_timestamp_running=0,
+        source_size_total=100_000,
+        source_size_running=5_000,
+        dest_size_running=4_000,
+    )
+    statsmod.incremental_stats_restore("test", state, "test.000001.tar", 1)
+    out1 = capsys.readouterr().out
+    assert "last..50s" in out1
+
+    clock[0] = 1_210
+    state.incremental_timestamp = 1_200
+    state.source_size_running = 10_000
+    state.dest_size_running = 8_000
+    statsmod.incremental_stats_restore("test", state, "test.000002.tar", 2)
+    out2 = capsys.readouterr().out
+    assert "last..10s" in out2
 
 
 def test_incremental_stats_chunked_avoids_dest_du_rescan(tmp_path: Path, monkeypatch, capsys) -> None:

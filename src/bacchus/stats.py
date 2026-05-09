@@ -222,15 +222,29 @@ def incremental_stats_restore(
     archive_max_num = len(str(archive_volumes)) + 1
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
+    pct = (tar_volume * 100) // archive_volumes if archive_volumes else 0
+
+    avg_time = elapsed_time // tar_volume if tar_volume > 0 else 0
+    remain_time = avg_time * max(0, archive_volumes - tar_volume)
+    if (
+        remain_time == 0
+        and pct < 100
+        and tar_volume > 0
+        and avg_time > 0
+        and state.source_size_total > 0
+        and state.source_size_running < state.source_size_total
+    ):
+        bpc = max(1, state.source_size_running // tar_volume)
+        bytes_rem = state.source_size_total - state.source_size_running
+        est_chunks = (bytes_rem + bpc - 1) // bpc
+        remain_time = avg_time * est_chunks
+
     incremental_time = timestamp - state.incremental_timestamp - state.incremental_timestamp_running
-    avg_time = elapsed_time // (tar_volume - 1) if tar_volume > 1 else 0
-    remain_time = avg_time * (archive_volumes - tar_volume + 1) if archive_volumes else 0
     comp_ratio = (
         100 - ((state.source_size_running * 100) // state.dest_size_running) if state.dest_size_running else 0
     )
-    pct = (tar_volume * 100) // archive_volumes if archive_volumes else 0
 
-    rem_txt = duration_readable(remain_time)
+    rem_txt = duration_readable(remain_time) if remain_time > 0 else "0s"
     state.remain_text_size_running = max(state.remain_text_size_running, len(rem_txt))
     remain_w = state.remain_text_size_running + 10
 
@@ -249,10 +263,10 @@ def incremental_stats_restore(
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_txt))
     compr_w = state.comp_ratio_text_size_running + 10
 
-    src_fmt = _fmt_int(state.source_size_running)
-    dst_fmt = _fmt_int(state.dest_size_running)
-    src_seg = f"source..{src_fmt}k"
-    dst_seg = f"dest..{dst_fmt}k"
+    src_fmt = _fmt_kb_scaled(state.source_size_running)
+    dst_fmt = _fmt_kb_scaled(state.dest_size_running)
+    src_seg = f"source..{src_fmt}"
+    dst_seg = f"dest..{dst_fmt}"
     state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
@@ -376,11 +390,10 @@ def print_estimate_chunked_restore(
     print(f"Archive chunks (this run):       {chunks_this_run}")
     if start_chunk > 1:
         print(f"Starting at chunk number:        {start_chunk}")
-    print(f"Total size of archive directory: {_fmt_int(source_size_total_kb)}k")
-    print("(encrypted/compressed payload on disk; restored size unknown until complete)")
+    print(f"Total size of archive directory: {_fmt_kb_scaled(source_size_total_kb)}")
     if ramdisk_planned and peak_intermediate_kb is not None and tmpfs_size_bytes is not None:
         tmpfs_kb = tmpfs_size_bytes // 1024
-        print(f"Peak intermediate (worst chunk): {_fmt_int(peak_intermediate_kb)}k")
+        print(f"Peak intermediate (worst chunk): {_fmt_kb_scaled(peak_intermediate_kb)}")
         print(f"Planned tmpfs size:              {_fmt_kb_scaled(tmpfs_kb)}")
 
 

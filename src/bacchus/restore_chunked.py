@@ -223,13 +223,16 @@ def run_restore(cfg: BcsConfig) -> None:
         st = persistence.load(tmp_runtime)
         st.source_size_running += src_sz
         st.dest_size_running += dst_sz
-        persistence.save(tmp_runtime, st)
 
         if cfg.statistics:
             if cfg.runstatistics:
                 statsmod.incremental_stats_restore(cfg.basename, st, member, vol_idx)
             else:
                 print(member)
+
+        st.incremental_timestamp = int(time.time())
+        st.incremental_timestamp_running = 0
+        persistence.save(tmp_runtime, st)
 
     if mv_buf:
         raise SystemExit("Truncated multi-volume group at end of backup.")
