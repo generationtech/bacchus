@@ -192,6 +192,52 @@ def test_incremental_stats_chunked_avg_per_chunk_not_legacy_divisor(capsys, tmp_
     assert "avg..30s" not in out
 
 
+def test_incremental_stats_chunked_remain_shows_zero_at_full_progress(capsys, tmp_path: Path, monkeypatch) -> None:
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        archive_mode="chunked",
+        bcs_dest=str(dest),
+        archive_volumes=10,
+        source_size_total=1000,
+        start_timestamp=0,
+        incremental_timestamp=0,
+        incremental_timestamp_running=0,
+        source_size_running=1000,
+        dest_size_running=500,
+    )
+    monkeypatch.setattr(statsmod.time, "time", lambda: 1000)
+    statsmod.incremental_stats_backup("test", state, "test.000010.tar", 10)
+    out = capsys.readouterr().out
+    assert " 100%" in out
+    assert "remain..0s" in out
+
+
+def test_incremental_stats_chunked_remain_fallback_when_volume_cap_equals_tar(
+    capsys, tmp_path: Path, monkeypatch
+) -> None:
+    """If chunk denominator says no volumes left but source pct < 100, use byte-based chunk estimate."""
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        archive_mode="chunked",
+        bcs_dest=str(dest),
+        archive_volumes=10,
+        source_size_total=100_000,
+        start_timestamp=0,
+        incremental_timestamp=0,
+        incremental_timestamp_running=0,
+        source_size_running=99_000,
+        dest_size_running=50_000,
+    )
+    monkeypatch.setattr(statsmod.time, "time", lambda: 1000)
+    monkeypatch.setattr(statsmod, "_chunked_volume_total_display", lambda st, tv: tv)
+    statsmod.incremental_stats_backup("test", state, "test.000010.tar", 10)
+    out = capsys.readouterr().out
+    assert " 99%" in out
+    assert re.search(r"remain\.\.[1-9]", out), f"expected non-zero remain duration in {out!r}"
+
+
 def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_path: Path, monkeypatch) -> None:
     dest = tmp_path / "dest"
     dest.mkdir()
@@ -212,7 +258,7 @@ def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_pa
     statsmod.completion_stats_backup(state, tar_volume=2)
     out = capsys.readouterr().out
     assert "Overall compression ratio:     50%" in out
-    assert "Total size of destinations:    100k" in out
+    assert "Total size of destinations:    100K" in out
 
 
 def test_completion_stats_chunked_total_runtime_uses_wall_clock(capsys, tmp_path: Path, monkeypatch) -> None:

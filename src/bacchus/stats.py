@@ -128,6 +128,18 @@ def incremental_stats_backup(
     if state.archive_mode == "chunked":
         avg_time = elapsed_time // tar_volume if tar_volume > 0 else 0
         remain_time = avg_time * max(0, volume_cap - tar_volume)
+        if (
+            remain_time == 0
+            and pct < 100
+            and tar_volume > 0
+            and avg_time > 0
+            and state.source_size_total > 0
+            and state.source_size_running < state.source_size_total
+        ):
+            bpc = max(1, state.source_size_running // tar_volume)
+            bytes_rem = state.source_size_total - state.source_size_running
+            est_chunks = (bytes_rem + bpc - 1) // bpc
+            remain_time = avg_time * est_chunks
     else:
         avg_time = elapsed_time // (tar_volume - 2) if tar_volume > 2 else 0
         raw_remain = avg_time * (archive_volumes - tar_volume + 2) if archive_volumes else 0
@@ -148,7 +160,7 @@ def incremental_stats_backup(
             dest_size += int(du.stdout.strip().splitlines()[-1].split()[0])
     comp_ratio = 100 - ((dest_size * 100) // state.source_size_running) if state.source_size_running else 0
     # Dynamic column widths (legacy bash incremental_stats): running maxima keep columns aligned.
-    rem_txt = duration_readable(remain_time)
+    rem_txt = duration_readable(remain_time) if remain_time > 0 else "0s"
     state.remain_text_size_running = max(state.remain_text_size_running, len(rem_txt))
     remain_w = state.remain_text_size_running + 10
 
@@ -253,7 +265,6 @@ def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) 
     completion_base = wall if wall > 0 else state.start_timestamp
     completion_time = completion_timestamp - completion_base - state.start_timestamp_running
     avg_time = completion_time // (tar_volume - 1) if tar_volume > 1 else completion_time
-    source_size_total_text = _fmt_int(state.source_size_total)
     tar_overhead = state.source_size_running - state.source_size_total
     bcs_dest = Path(state.bcs_dest)
     if state.archive_mode == "chunked":
@@ -266,18 +277,17 @@ def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) 
             check=True,
         )
         dest_size_running = state.dest_size_running + int(du.stdout.strip().splitlines()[-1].split()[0])
-    dest_size_running_text = _fmt_int(dest_size_running)
     comp_ratio = 100 - ((dest_size_running * 100) // state.source_size_total) if state.source_size_total else 0
     print("\nBACKUP OPERATION COMPLETE")
     print(f"Total runtime:                 {duration_readable(completion_time)}")
     print(f"Average time per archive file: {duration_readable(avg_time)}")
     print(f"Number of archive files:       {tar_volume - 1}")
-    print(f"Tar overhead:                  {_fmt_int(tar_overhead)}k")
-    print(f"Total size of backup:          {source_size_total_text}k")
+    print(f"Tar overhead:                  {_fmt_kb_scaled(tar_overhead)}")
+    print(f"Total size of backup:          {_fmt_kb_scaled(state.source_size_total)}")
     if dest_size_running:
-        print(f"Total size of destinations:    {dest_size_running_text}k")
+        print(f"Total size of destinations:    {_fmt_kb_scaled(dest_size_running)}")
     else:
-        print(f"Total size of destination:     {dest_size_running_text}k")
+        print(f"Total size of destination:     {_fmt_kb_scaled(dest_size_running)}")
     print(f"Overall compression ratio:     {comp_ratio}%")
 
 
@@ -285,7 +295,6 @@ def completion_stats_restore(state: "persistence.RuntimeState", archive_volumes:
     completion_timestamp = int(time.time())
     completion_time = completion_timestamp - state.start_timestamp - state.start_timestamp_running
     avg_time = completion_time // archive_volumes if archive_volumes else completion_time
-    source_size_total_text = _fmt_int(state.source_size_total)
     du = subprocess.run(
         ["du", "-sk", "--apparent-size", str(bcs_dest)],
         capture_output=True,
@@ -293,16 +302,15 @@ def completion_stats_restore(state: "persistence.RuntimeState", archive_volumes:
         check=True,
     )
     dest_size = int(du.stdout.split()[0])
-    dest_size_text = _fmt_int(dest_size)
     tar_overhead = state.dest_size_running - dest_size
     comp_ratio = 100 - ((state.source_size_total * 100) // dest_size) if dest_size else 0
     print("\nRESTORE OPERATION COMPLETE")
     print(f"Total runtime:                 {duration_readable(completion_time)}")
     print(f"Average time per archive file: {duration_readable(avg_time)}")
     print(f"Number of archive files:       {archive_volumes}")
-    print(f"Tar overhead:                  {_fmt_int(tar_overhead)}k")
-    print(f"Total size of source:          {source_size_total_text}k")
-    print(f"Total size of restore:         {dest_size_text}k")
+    print(f"Tar overhead:                  {_fmt_kb_scaled(tar_overhead)}")
+    print(f"Total size of source:          {_fmt_kb_scaled(state.source_size_total)}")
+    print(f"Total size of restore:         {_fmt_kb_scaled(dest_size)}")
     print(f"Overall compression ratio:     {comp_ratio}%")
 
 
