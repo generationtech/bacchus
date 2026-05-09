@@ -281,6 +281,39 @@ sys.exit(0)
     script_path.chmod(script_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+def tar_extract_multivolume_script(
+    first_slice: Path,
+    dest: Path,
+    verbose: bool,
+    new_volume_script: Path,
+    volno_file: Path,
+    *,
+    env: dict | None = None,
+) -> None:
+    """
+    Extract one GNU multi-volume archive using an external ``--new-volume-script``.
+
+    Omits ``--format posix`` so inner tier-3 ``tar -cM`` slices (GNU ``M`` headers) match create.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    args = ["tar"]
+    if verbose:
+        args += ["-xpMv"]
+    else:
+        args += ["-xpM"]
+    args += [
+        "--new-volume-script",
+        str(new_volume_script),
+        "--volno-file",
+        str(volno_file),
+        "-f",
+        str(first_slice),
+        "-C",
+        str(dest),
+    ]
+    run_check(args, env=env)
+
+
 def tar_extract_multivolume_buffered(slices: List[Path], dest: Path, verbose: bool) -> None:
     """
     Extract one GNU multi-volume group from decoded plain-tar slice files.

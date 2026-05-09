@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import atexit
+import json
+import os
 import re
+import stat
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -14,10 +18,7 @@ from bacchus.classify import TarSegmentKind, classify_tar_segment
 from bacchus.config import BcsConfig
 from bacchus.pipeline import process_volume_restore
 from bacchus import stats as statsmod
-
-
-def _chunk_member_name(path: Path, basename: str) -> str:
-    return restore_sizing.chunk_member_name(path, basename)
+from bacchus import volume_supply
 
 
 def _list_chunks(source: Path, basename: str) -> list[Path]:
@@ -33,20 +34,85 @@ def _list_chunks(source: Path, basename: str) -> list[Path]:
     return [p for _, p in items]
 
 
-def _artifact_path(src_dir: Path, member: str, compress: bool, password: str) -> Path:
-    p = src_dir / member
-    if compress:
-        p = Path(str(p) + ".gz")
-    if password:
-        p = Path(str(p) + ".gpg")
-    return p
+def _run_inner_mv_extract(
+    *,
+    cfg: BcsConfig,
+    vol1_plain: Path,
+    first_seq: int,
+    state_path: Path,
+    hook_script: Path,
+    volno_path: Path,
+    tmp_runtime: Path,
+    bcs_source: Path,
+    inner_mv_group: int,
+    stats_tar_volume_after_vol1: int,
+    compress: bool,
+    password: str,
+    decryptdir: Path,
+    compressdir: Path,
+) -> tuple[int, Path]:
+    """
+    Run legacy-style inner ``tar -xM``: volume 1 is *vol1_plain*; hook decodes later chunks on demand.
 
+    Returns ``(hook_decode_count, updated_bcs_source)``.
+    """
+    state = {
+        "datafile": str(tmp_runtime.resolve()),
+        "basename": cfg.basename,
+        "compress": compress,
+        "password": password,
+        "decryptdir": str(decryptdir.resolve()),
+        "compressdir": str(compressdir.resolve()),
+        "bcs_source": str(bcs_source.resolve()),
+        "first_chunk_seq": first_seq,
+        "statistics": cfg.statistics,
+        "runstatistics": cfg.runstatistics,
+        "tier3_mv_group": inner_mv_group,
+        "verbosetar": cfg.verbosetar,
+        "vol1_plain_path": str(vol1_plain.resolve()),
+        "stats_tar_volume_after_vol1": stats_tar_volume_after_vol1,
+        "hook_decode_count": 0,
+    }
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    volno_path.write_text("1\n", encoding="utf-8")
+    hook_script.write_text(
+        "#!/bin/sh\n" f'exec "{sys.executable}" -m bacchus.restore_inner_mv_hook\n',
+        encoding="utf-8",
+    )
+    hook_script.chmod(hook_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-def _prompt_new_source(expected: Path, current: Path) -> Path:
-    print(f"\nArchive chunk: {expected.name}\nNOT FOUND in:   {current}\n")
-    print("Place the file or enter a new source directory path (empty = retry):\n")
-    np = input().strip()
-    return Path(np) if np else current
+    env = os.environ.copy()
+    env["BCS_INNER_RESTORE_STATE"] = str(state_path.resolve())
+    hook_decode_count = 0
+    try:
+        extern.tar_extract_multivolume_script(
+            vol1_plain,
+            cfg.dest.resolve(),
+            cfg.verbosetar,
+            hook_script,
+            volno_path,
+            env=env,
+        )
+    finally:
+        try:
+            st_final = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            st_final = {}
+        v1_left = st_final.pop("vol1_plain_path", None)
+        if v1_left:
+            Path(v1_left).unlink(missing_ok=True)
+        pend = st_final.pop("pending_unlink_plain", None)
+        if pend:
+            Path(pend).unlink(missing_ok=True)
+        hook_decode_count = int(st_final.get("hook_decode_count", 0))
+        state_path.write_text(json.dumps(st_final), encoding="utf-8")
+
+    try:
+        st_out = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        st_out = {}
+    new_src = Path(st_out.get("bcs_source", str(bcs_source)))
+    return hook_decode_count, new_src.resolve()
 
 
 def run_restore(cfg: BcsConfig) -> None:
@@ -173,16 +239,21 @@ def run_restore(cfg: BcsConfig) -> None:
         ),
     )
 
-    mv_buf: list[Path] = []
     inner_mv_group = 0
+    processed_chunks = 0
+    idx = 0
+    bcs_source_mutable = bcs_source
 
-    for vol_idx, p in enumerate(paths, start=1):
-        member = _chunk_member_name(p, cfg.basename)
-        src_dir = bcs_source
-        artifact = _artifact_path(src_dir, member, compress, password)
-        while not artifact.is_file():
-            src_dir = _prompt_new_source(artifact, src_dir)
-            artifact = _artifact_path(src_dir, member, compress, password)
+    while idx < len(paths):
+        p = paths[idx]
+        member = restore_sizing.chunk_member_name(p, cfg.basename)
+        src_dir, _artifact = volume_supply.ensure_chunk_artifact(
+            member,
+            initial_src=bcs_source_mutable,
+            compress=compress,
+            password=password,
+        )
+        bcs_source_mutable = src_dir
 
         decoded, src_sz, dst_sz = process_volume_restore(
             src_dir,
@@ -192,70 +263,91 @@ def run_restore(cfg: BcsConfig) -> None:
             compress=compress,
             password=password,
         )
+        processed_chunks += 1
+
         kind = classify_tar_segment(decoded)
-        # Inner Tier-3 ``tar -cM`` last slice often looks like standalone (ustar trailer) but still
-        # needs earlier slices for ``tar -xM``; once mv_buf is open, finish the group here.
-        if mv_buf and kind == TarSegmentKind.STANDALONE:
-            kind = TarSegmentKind.MV_END
-
-        tier3_g: int | None = None
-        tier3_v: int | None = None
-
-        if kind == TarSegmentKind.STANDALONE:
-            if mv_buf:
-                raise SystemExit(
-                    "Invalid layout: standalone chunk while a multi-volume group is open. "
-                    "Use an earlier --start-chunk or restore from chunk 1."
-                )
-            extern.tar_extract_single(decoded, cfg.dest.resolve(), cfg.verbosetar)
-            decoded.unlink(missing_ok=True)
-        elif kind == TarSegmentKind.MV_START:
-            if mv_buf:
-                raise SystemExit("Invalid layout: MV_START while a group is already open.")
-            inner_mv_group += 1
-            mv_buf.append(decoded)
-            tier3_g = inner_mv_group
-            tier3_v = len(mv_buf)
-        elif kind in (TarSegmentKind.MV_MIDDLE, TarSegmentKind.MV_END):
-            if not mv_buf:
-                raise SystemExit(
-                    "Invalid layout: multi-volume continuation without start. "
-                    "Choose a smaller --start-chunk that begins at MV_START."
-                )
-            mv_buf.append(decoded)
-            tier3_g = inner_mv_group
-            tier3_v = len(mv_buf)
-            if kind == TarSegmentKind.MV_END:
-                extern.tar_extract_multivolume_buffered(mv_buf, cfg.dest.resolve(), cfg.verbosetar)
-                for x in mv_buf:
-                    x.unlink(missing_ok=True)
-                mv_buf.clear()
-        else:
-            raise SystemExit(f"Unknown segment kind: {kind}")
 
         st = persistence.load(tmp_runtime)
         st.source_size_running += src_sz
         st.dest_size_running += dst_sz
 
-        if cfg.statistics:
-            if cfg.runstatistics:
-                statsmod.incremental_stats_restore(
-                    cfg.basename,
-                    st,
-                    member,
-                    vol_idx,
-                    tier3_mv_group=tier3_g,
-                    tier3_inner_mv_vol=tier3_v,
-                )
-            else:
-                print(member)
+        tier3_g: int | None = None
+        tier3_v: int | None = None
 
-        st.incremental_timestamp = int(time.time())
-        st.incremental_timestamp_running = 0
-        persistence.save(tmp_runtime, st)
+        if kind == TarSegmentKind.STANDALONE:
+            extern.tar_extract_single(decoded, cfg.dest.resolve(), cfg.verbosetar)
+            decoded.unlink(missing_ok=True)
+            tier3_g = None
+            tier3_v = None
 
-    if mv_buf:
-        raise SystemExit("Truncated multi-volume group at end of backup.")
+            if cfg.statistics:
+                if cfg.runstatistics:
+                    statsmod.incremental_stats_restore(
+                        cfg.basename,
+                        st,
+                        member,
+                        processed_chunks,
+                        tier3_mv_group=tier3_g,
+                        tier3_inner_mv_vol=tier3_v,
+                    )
+                else:
+                    print(member)
+
+            st.incremental_timestamp = int(time.time())
+            st.incremental_timestamp_running = 0
+            persistence.save(tmp_runtime, st)
+            idx += 1
+            continue
+
+        if kind == TarSegmentKind.MV_START:
+            inner_mv_group += 1
+            tier3_g = inner_mv_group
+            tier3_v = 1
+            if cfg.statistics:
+                if cfg.runstatistics:
+                    statsmod.incremental_stats_restore(
+                        cfg.basename,
+                        st,
+                        member,
+                        processed_chunks,
+                        tier3_mv_group=tier3_g,
+                        tier3_inner_mv_vol=tier3_v,
+                    )
+                else:
+                    print(member)
+            st.incremental_timestamp = int(time.time())
+            st.incremental_timestamp_running = 0
+            persistence.save(tmp_runtime, st)
+
+            first_seq = volume_supply.chunk_seq_from_member(member, cfg.basename)
+            state_path = Path(str(tmp_prefix) + f".inner_mv.{idx}.json")
+            hook_script = Path(str(tmp_prefix) + f".inner_mv_nvs.{idx}.sh")
+            volno_path = Path(str(tmp_prefix) + f".inner.volno.{idx}")
+            hook_decode_count, bcs_source_mutable = _run_inner_mv_extract(
+                cfg=cfg,
+                vol1_plain=decoded,
+                first_seq=first_seq,
+                state_path=state_path,
+                hook_script=hook_script,
+                volno_path=volno_path,
+                tmp_runtime=tmp_runtime,
+                bcs_source=bcs_source_mutable,
+                inner_mv_group=inner_mv_group,
+                stats_tar_volume_after_vol1=processed_chunks,
+                compress=compress,
+                password=password,
+                decryptdir=decryptdir,
+                compressdir=compressdir,
+            )
+            processed_chunks += hook_decode_count
+            idx += 1 + hook_decode_count
+            continue
+
+        decoded.unlink(missing_ok=True)
+        raise SystemExit(
+            "Invalid layout: multi-volume continuation without start at this position. "
+            "Use a smaller --start-chunk that begins at the first slice (MV_START) of the inner group."
+        )
 
     if cfg.statistics and cfg.endstatistics:
         st = persistence.load(tmp_runtime)
