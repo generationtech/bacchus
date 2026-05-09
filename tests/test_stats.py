@@ -238,6 +238,28 @@ def test_incremental_stats_chunked_remain_fallback_when_volume_cap_equals_tar(
     assert re.search(r"remain\.\.[1-9]", out), f"expected non-zero remain duration in {out!r}"
 
 
+def test_incremental_stats_backup_tier3_shows_inner_mv_volume(capsys, tmp_path: Path, monkeypatch) -> None:
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        archive_mode="chunked",
+        bcs_dest=str(dest),
+        archive_volumes=10,
+        source_size_total=100_000,
+        start_timestamp=0,
+        incremental_timestamp=0,
+        source_size_running=50_000,
+        dest_size_running=40_000,
+    )
+    monkeypatch.setattr(statsmod.time, "time", lambda: 500)
+    statsmod.incremental_stats_backup(
+        "test", state, "test.000005.tar", 5, tier3_inner_mv_vol=3
+    )
+    out = capsys.readouterr().out
+    assert "[MV 3]" in out
+    assert "test.000005.tar [MV 3]" in out
+
+
 def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_path: Path, monkeypatch) -> None:
     dest = tmp_path / "dest"
     dest.mkdir()
@@ -259,6 +281,29 @@ def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_pa
     out = capsys.readouterr().out
     assert "Overall compression ratio:     50%" in out
     assert "Total size of destinations:    100K" in out
+    assert "Large files (inner multi-volume tar): 0" in out
+
+
+def test_completion_stats_chunked_large_file_count_nonzero(capsys, tmp_path: Path, monkeypatch) -> None:
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        archive_mode="chunked",
+        bcs_dest=str(dest),
+        source_size_total=200,
+        source_size_running=200,
+        dest_size_running=100,
+        start_timestamp=1000,
+        tier3_large_file_count=4,
+    )
+
+    def boom_run(*args, **kwargs):
+        raise AssertionError("chunked completion must not invoke subprocess.run (du)")
+
+    monkeypatch.setattr(statsmod.subprocess, "run", boom_run)
+    statsmod.completion_stats_backup(state, tar_volume=2)
+    out = capsys.readouterr().out
+    assert "Large files (inner multi-volume tar): 4" in out
 
 
 def test_completion_stats_chunked_total_runtime_uses_wall_clock(capsys, tmp_path: Path, monkeypatch) -> None:

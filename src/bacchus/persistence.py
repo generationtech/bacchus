@@ -36,6 +36,8 @@ class RuntimeState:
     wall_clock_start_timestamp: int = 0
     # Chunked backup: EMA-smoothed ``/NNN`` denominator (persisted between chunks).
     chunk_total_display_smooth: int = 0
+    # Chunked tier-3: source files archived via inner ``tar -cM`` (large files).
+    tier3_large_file_count: int = 0
 
     def to_json(self) -> str:
         d = asdict(self)

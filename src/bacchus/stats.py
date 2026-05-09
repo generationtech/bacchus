@@ -105,6 +105,8 @@ def incremental_stats_backup(
     state: "persistence.RuntimeState",
     tar_archive: str,
     tar_volume: int,
+    *,
+    tier3_inner_mv_vol: int | None = None,
 ) -> None:
     archive_volumes = state.archive_volumes
     pct = _backup_progress_pct(state)
@@ -112,7 +114,10 @@ def incremental_stats_backup(
         volume_cap = _chunked_volume_total_display(state, tar_volume)
     else:
         volume_cap = max(archive_volumes, tar_volume) if archive_volumes else tar_volume
-    archive_max_name = len(basename) + len(str(volume_cap)) + 6
+    archive_label = (
+        f"{tar_archive} [MV {tier3_inner_mv_vol}]" if tier3_inner_mv_vol is not None else tar_archive
+    )
+    archive_max_name = max(len(basename) + len(str(volume_cap)) + 6, len(archive_label))
     archive_max_num = len(str(volume_cap)) + 1
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
@@ -122,7 +127,7 @@ def incremental_stats_backup(
     )
     if short_line:
         print(
-            f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%"
+            f"{archive_label:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%"
         )
         return
     if state.archive_mode == "chunked":
@@ -187,7 +192,7 @@ def incremental_stats_backup(
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
     line = (
-        f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%  "
+        f"{archive_label:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%  "
         f"{'remain..' + rem_txt:<{remain_w}s}"
         f"{'elapsed..' + el_txt:<{elapsed_w}s}"
         f"{'last..' + inc_txt:<{last_w}s}"
@@ -282,6 +287,8 @@ def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) 
     print(f"Total runtime:                 {duration_readable(completion_time)}")
     print(f"Average time per archive file: {duration_readable(avg_time)}")
     print(f"Number of archive files:       {tar_volume - 1}")
+    if state.archive_mode == "chunked":
+        print(f"Large files (inner multi-volume tar): {state.tier3_large_file_count}")
     print(f"Tar overhead:                  {_fmt_kb_scaled(tar_overhead)}")
     print(f"Total size of backup:          {_fmt_kb_scaled(state.source_size_total)}")
     if dest_size_running:

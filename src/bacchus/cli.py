@@ -256,17 +256,25 @@ def main(argv: list[str] | None = None) -> int:
         _print_options(cfg, ns)
         if not cfg.ramdisk and (cfg.compress or cfg.password):
             print(f"Intermediate tar directory:          {cfg.tardir}")
-        print(f"Volume size for archive:             {cfg.volumesize_kb:,}k".replace(",", ""))
+        _BACKUP_OPT_COL = 37
+        print(
+            f"{'Volume size for archive:':<{_BACKUP_OPT_COL}}"
+            f"{cfg.volumesize_kb:,}k".replace(",", "")
+        )
         if cfg.archive_mode == "chunked":
             print(
-                f"Absolute max chunk (kB):             {cfg.resolved_absolute_max_kb():,}".replace(",", "")
+                f"{'Absolute max chunk (kB):':<{_BACKUP_OPT_COL}}"
+                f"{cfg.resolved_absolute_max_kb():,}".replace(",", "")
             )
-            print(f"Mini MV slice (kB):                 {cfg.resolved_mini_slice_kb():,}".replace(",", ""))
+            print(
+                f"{'Mini MV slice (kB):':<{_BACKUP_OPT_COL}}"
+                f"{cfg.resolved_mini_slice_kb():,}".replace(",", "")
+            )
             scope = cfg.archive_path_scope
             top = (cfg.archive_top_dir or "").strip()
-            print(f"Archive path scope:                  {scope}")
+            print(f"{'Archive path scope:':<{_BACKUP_OPT_COL}}{scope}")
             if top:
-                print(f"Archive top directory name:          {top}")
+                print(f"{'Archive top directory name:':<{_BACKUP_OPT_COL}}{top}")
         print()
         _confirm_start(cfg, ns)
         if cfg.archive_mode == "legacy":

@@ -50,7 +50,9 @@ def main() -> None:
 
     if st.get("statistics"):
         if st.get("runstatistics"):
-            statsmod.incremental_stats_backup(basename, rt, member, chunk_seq)
+            statsmod.incremental_stats_backup(
+                basename, rt, member, chunk_seq, tier3_inner_mv_vol=tar_volume
+            )
         else:
             print(member)
 
