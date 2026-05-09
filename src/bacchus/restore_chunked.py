@@ -16,7 +16,7 @@ from pathlib import Path
 from bacchus import extern, persistence, ramdisk, restore_sizing
 from bacchus.classify import TarSegmentKind, classify_tar_segment
 from bacchus.config import BcsConfig
-from bacchus.pipeline import process_volume_restore
+from bacchus.pipeline import infer_compress_encrypt_from_chunk_paths, process_volume_restore
 from bacchus import stats as statsmod
 from bacchus import volume_supply
 
@@ -133,9 +133,12 @@ def run_restore(cfg: BcsConfig) -> None:
     if not paths:
         raise SystemExit(f"No chunks at or after --start-chunk {start}")
 
-    tail = str(paths[-1])
-    compress = ".gz" in tail
-    password = cfg.password if ".gpg" in tail else ""
+    compress, encrypt_on_disk = infer_compress_encrypt_from_chunk_paths(all_chunks)
+    password = cfg.password if encrypt_on_disk else ""
+    if encrypt_on_disk and not cfg.password:
+        raise SystemExit(
+            "Archive chunks are encrypted (.gpg); provide a password (-p, -f, or console prompt)."
+        )
 
     rd: ramdisk.Ramdisk | None = None
     decryptdir = cfg.decryptdir.resolve()

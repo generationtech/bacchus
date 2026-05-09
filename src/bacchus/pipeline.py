@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Tuple
+from typing import Sequence, Tuple
 
 from bacchus import extern
 
@@ -118,11 +118,25 @@ def process_volume_restore(
     return source, source_actual_size, dest_actual_size
 
 
+def infer_compress_encrypt_from_chunk_paths(chunks: Sequence[Path]) -> Tuple[bool, bool]:
+    """
+    Infer pigz + gpg layout from chunk filenames.
+
+    Scans every discovered chunk so interrupted backups (where the highest-number file might omit
+    ``.gpg``) still resolve artifact paths correctly for sizing and restore.
+    """
+    if not chunks:
+        return False, False
+    compress_on_disk = any(".gz" in p.name for p in chunks)
+    encrypt_on_disk = any(p.name.endswith(".gpg") for p in chunks)
+    return compress_on_disk, encrypt_on_disk
+
+
 def detect_compress_encrypt_from_artifacts(bcs_source: Path, basename: str) -> Tuple[bool, bool]:
     import glob
 
     matches = sorted(glob.glob(str(bcs_source / f"{basename}.tar*")))
     if not matches:
         return False, False
-    tail = matches[-1]
-    return ".gz" in tail, ".gpg" in tail
+    paths = [Path(m) for m in matches]
+    return infer_compress_encrypt_from_chunk_paths(paths)
