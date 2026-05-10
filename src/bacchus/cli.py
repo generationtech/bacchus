@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 from pathlib import Path
 
 from bacchus import backup_chunked, restore_chunked
@@ -155,11 +156,11 @@ def _password_from_args(ns: argparse.Namespace) -> str:
     if ns.userpassword == "on":
         while True:
             print()
-            p1 = input("Enter a password for encryption or press enter for no password: ")
+            p1 = getpass.getpass("Enter a password for encryption or press enter for no password: ")
             print()
             if not p1:
                 return ""
-            p2 = input("Re-enter a password for encryption or press enter for no password: ")
+            p2 = getpass.getpass("Re-enter a password for encryption or press enter for no password: ")
             print()
             if not p2 or p1 != p2:
                 print("Passwords do not match!")
@@ -201,7 +202,8 @@ def _confirm_start(cfg: BcsConfig, ns: argparse.Namespace) -> None:
     if ns.confirm == "on":
         input("Press enter to begin...")
         print()
-    if (not cfg.compress) or (not cfg.password):
+    # Ramdisk is only meaningful while compress or encryption stages need scratch space.
+    if not (cfg.compress or cfg.password):
         cfg.ramdisk = False
 
 

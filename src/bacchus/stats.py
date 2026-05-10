@@ -80,6 +80,15 @@ def _chunked_volume_total_display(state: persistence.RuntimeState, tar_volume: i
     return cap
 
 
+def _fmt_kb_signed_scaled(kb: int) -> str:
+    """Like :func:`_fmt_kb_scaled` but preserves sign for deltas (e.g. tar overhead)."""
+    if kb == 0:
+        return "0K"
+    sign = "-" if kb < 0 else ""
+    body = _fmt_kb_scaled(abs(kb))
+    return sign + body
+
+
 def _fmt_kb_scaled(kb: int) -> str:
     """
     Format KiB counts (``du -sk`` / ``du_sk_apparent``) with K/M/G/T/P suffix.
@@ -219,7 +228,7 @@ def incremental_stats_backup(
     state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
-    date_s = time.strftime("%m-%d-%Y %H:%M:%S", time.localtime(timestamp))
+    date_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
     elapsed_col_w = max(
         state.stats_line_elapsed_seg_w,
         state.stats_line_remain_seg_w,
@@ -340,7 +349,7 @@ def incremental_stats_restore(
     )
     src_w = state.stats_line_source_seg_w
     dst_w = state.stats_line_dest_seg_w
-    date_s = time.strftime("%m-%d-%Y %H:%M:%S", time.localtime(timestamp))
+    date_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
     prefix = (
         f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} "
         f"{_stats_pct_field(pct)}{STATS_INCREMENTAL_COL_GAP}"
@@ -366,6 +375,8 @@ def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) 
     completion_base = wall if wall > 0 else state.start_timestamp
     completion_time = completion_timestamp - completion_base - state.start_timestamp_running
     avg_time = completion_time // (tar_volume - 1) if tar_volume > 1 else completion_time
+    # Sum of raw per-chunk ``.tar`` sizes (``du --apparent-size``) minus apparent source tree size:
+    # tar headers, 512-byte padding, PAX/long-name records, and multivolume glue.
     tar_overhead = state.source_size_running - state.source_size_total
     bcs_dest = Path(state.bcs_dest)
     dest_size_running = state.dest_size_running
@@ -381,7 +392,7 @@ def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) 
     _summary_line("Average time per archive file:", duration_readable(avg_time))
     _summary_line("Number of archive files:", str(tar_volume - 1))
     _summary_line("Large files (MV):", str(state.tier3_large_file_count))
-    _summary_line("Tar overhead:", _fmt_kb_scaled(tar_overhead))
+    _summary_line("Tar overhead:", _fmt_kb_signed_scaled(tar_overhead))
     _summary_line("Total size of backup:", _fmt_kb_scaled(state.source_size_total))
     if dest_size_running:
         _summary_line("Total size of destinations:", _fmt_kb_scaled(dest_size_running))
@@ -401,13 +412,14 @@ def completion_stats_restore(state: "persistence.RuntimeState", archive_volumes:
         check=True,
     )
     dest_size = int(du.stdout.split()[0])
+    # Running sum of decoded segment sizes vs final restored tree (legacy field).
     tar_overhead = state.dest_size_running - dest_size
     comp_ratio = 100 - ((state.source_size_total * 100) // dest_size) if dest_size else 0
     print("\nRESTORE OPERATION COMPLETE")
     print(f"Total runtime:                 {duration_readable(completion_time)}")
     print(f"Average time per archive file: {duration_readable(avg_time)}")
     print(f"Number of archive files:       {archive_volumes}")
-    print(f"Tar overhead:                  {_fmt_kb_scaled(tar_overhead)}")
+    print(f"Tar overhead:                  {_fmt_kb_signed_scaled(tar_overhead)}")
     print(f"Total size of source:          {_fmt_kb_scaled(state.source_size_total)}")
     print(f"Total size of restore:         {_fmt_kb_scaled(dest_size)}")
     print(f"Overall compression ratio:     {comp_ratio}%")

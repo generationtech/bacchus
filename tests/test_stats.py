@@ -16,7 +16,7 @@ def _assert_incremental_line_gutters(line: str, *, expect_mv: bool) -> None:
     assert line[pct_pct + 1 : ridx] == gap, (
         f"expected {gap!r} after progress percent before remain.., got {line[pct_pct:ridx]!r}"
     )
-    ts_m = re.search(r"\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}", line)
+    ts_m = re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", line)
     assert ts_m is not None
     dstart = ts_m.start()
     assert line[dstart - 2 : dstart] == gap, (
@@ -44,7 +44,7 @@ def test_incremental_stats_backup_line_has_spaces(capsys, tmp_path: Path, monkey
     monkeypatch.setattr(statsmod.time, "time", lambda: 1_050)
     statsmod.incremental_stats_backup("test", state, "test.000003.tar", 3)
     out = capsys.readouterr().out.strip()
-    assert re.search(r"source\.\..+\s+dest\.\..+\s+[0-9]{2}-[0-9]{2}-[0-9]{4}", out), (
+    assert re.search(r"source\.\..+\s+dest\.\..+\s+[0-9]{4}-[0-9]{2}-[0-9]{2}", out), (
         f"expected space before date in: {out!r}"
     )
     _assert_incremental_line_gutters(out, expect_mv=False)
@@ -124,7 +124,7 @@ def test_incremental_stats_restore_line_has_spaces(capsys, monkeypatch) -> None:
     )
     statsmod.incremental_stats_restore("test", state, "test.000003.tar", 3)
     out = capsys.readouterr().out.strip()
-    assert re.search(r"source\.\.\S+\s+dest\.\.\S+\s+[0-9]{2}-[0-9]{2}", out), (
+    assert re.search(r"source\.\.\S+\s+dest\.\.\S+\s+[0-9]{4}-[0-9]{2}", out), (
         f"expected scaled source/dest and space before date in: {out!r}"
     )
 
@@ -343,7 +343,7 @@ def test_incremental_stats_backup_tier3_shows_inner_mv_volume(capsys, tmp_path: 
     out = capsys.readouterr().out
     assert "[L1 MV 3]" in out
     assert "test.000005.tar [L" not in out
-    assert re.search(r"\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}  \[L1 MV 3\]", out)
+    assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}  \[L1 MV 3\]", out)
 
 
 def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_path: Path, monkeypatch) -> None:
@@ -424,6 +424,12 @@ def test_fmt_kb_scaled() -> None:
     assert statsmod._fmt_kb_scaled(1024) == "1M"
     assert statsmod._fmt_kb_scaled(1500) == "1.5M"
     assert statsmod._fmt_kb_scaled(991_700) == "968.5M"
+
+
+def test_fmt_kb_signed_scaled() -> None:
+    assert statsmod._fmt_kb_signed_scaled(0) == "0K"
+    assert statsmod._fmt_kb_signed_scaled(1000) == "1M"
+    assert statsmod._fmt_kb_signed_scaled(-1000) == "-1M"
 
 
 def test_backup_progress_pct() -> None:

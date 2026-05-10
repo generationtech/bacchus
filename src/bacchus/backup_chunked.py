@@ -214,14 +214,22 @@ def run_backup(cfg: BcsConfig) -> None:
     if not cfg.compress and not cfg.password:
         tardir = dest
     elif cfg.ramdisk and (cfg.compress or cfg.password):
-        size_b = ramdisk.ramdisk_size_bytes(cfg.volumesize_kb, cfg.compress, bool(cfg.password))
+        max_chunk_kb = max(
+            cfg.volumesize_kb,
+            cfg.resolved_absolute_max_kb(),
+            cfg.resolved_mini_slice_kb(),
+        )
+        size_b = ramdisk.ramdisk_size_bytes(
+            cfg.volumesize_kb,
+            cfg.compress,
+            bool(cfg.password),
+            max_chunk_kb=max_chunk_kb,
+        )
         rd_path = Path(str(tmp_prefix) + ".ramdisk")
         rd = ramdisk.Ramdisk(rd_path, size_b)
         rd.mount()
         tardir = rd_path
-        # pigz writes ``.gz`` under ``compressdir``; use ``dest`` so tmpfs only holds raw ``.tar`` /
-        # tier-3 slices (tar + gzip both on tmpfs exceeds ``size=`` for large ``-v``).
-        compressdir = dest if cfg.compress else rd_path
+        compressdir = rd_path
 
     def cleanup() -> None:
         ramdisk.cleanup_print()

@@ -39,20 +39,36 @@ class Ramdisk:
         self._mounted = False
 
 
-def ramdisk_size_bytes(volumesize_kb: int, compress: bool, encrypt: bool) -> int:
+def ramdisk_size_bytes(
+    volumesize_kb: int,
+    compress: bool,
+    encrypt: bool,
+    *,
+    max_chunk_kb: int | None = None,
+) -> int:
     """
-    tmpfs size for tar staging when ``-r on``.
+    tmpfs size for tar + compression + encryption scratch when ``-r on``.
 
-    Legacy bash used one ``volumesize`` slab per enabled stage (compress / encrypt) plus 1% slack.
-    Python backup writes the intermediate ``.gz`` under ``-d`` (not tmpfs), so the ramdisk only holds
-    raw ``.tar`` / tier-3 slices—not ``tar`` and ``gzip`` output at once on tmpfs.
+    ``max_chunk_kb`` is the largest raw chunk (KiB) we may hold on tmpfs at once: at least
+    ``volumesize_kb``, and typically ``max(absolute_max, mini_slice)`` from chunked backup so a
+    single tier-2 or tier-3 slice fits.
+
+    Peak footprint (same filesystem) while shipping one chunk:
+
+    - compress: raw ``.tar`` and ``.pigz`` output ``.gz`` can both exist briefly.
+    - encrypt (no compress): raw ``.tar`` and ``.gpg``.
+    - both: ``.gz`` then ``.gpg``; bound by roughly three slab-sized artifacts in the worst case.
+
+    Slack: 1% of the dominant chunk size (same as legacy single-slab rule, applied to ``chunk_kb``).
     """
-    ramdisk_kb = 0
-    if compress:
-        ramdisk_kb += volumesize_kb
-    if encrypt:
-        ramdisk_kb += volumesize_kb
-    return (ramdisk_kb * 1024) + ((volumesize_kb * 1024) // 100)
+    chunk_kb = max(volumesize_kb, max_chunk_kb or 0)
+    if not compress and not encrypt:
+        return chunk_kb * 1024 + ((chunk_kb * 1024) // 100)
+    if compress and encrypt:
+        ramdisk_kb = chunk_kb * 3
+    else:
+        ramdisk_kb = chunk_kb * 2
+    return (ramdisk_kb * 1024) + ((chunk_kb * 1024) // 100)
 
 
 def cleanup_print() -> None:
