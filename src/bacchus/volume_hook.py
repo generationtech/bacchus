@@ -1,5 +1,5 @@
 """
-Invoked by GNU tar --new-volume-script (legacy backup/restore) or manually for last volume.
+Invoked by GNU tar --new-volume-script (multi-volume / Tier-3 flows) or manually for last volume.
 
 Usage: python -m bacchus.volume_hook backup|restore
 Reads TAR_* and BCS_* from environment.

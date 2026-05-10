@@ -132,10 +132,7 @@ def incremental_stats_backup(
 ) -> None:
     archive_volumes = state.archive_volumes
     pct = _backup_progress_pct(state)
-    if state.archive_mode == "chunked":
-        volume_cap = _chunked_volume_total_display(state, tar_volume)
-    else:
-        volume_cap = max(archive_volumes, tar_volume) if archive_volumes else tar_volume
+    volume_cap = _chunked_volume_total_display(state, tar_volume)
     archive_max_name = len(basename) + len(str(volume_cap)) + 6
     archive_max_num = len(str(volume_cap)) + 1
     if tier3_inner_mv_vol is not None:
@@ -147,48 +144,28 @@ def incremental_stats_backup(
         mv_suffix = ""
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
-    # Legacy tar -cM skips full stats for the first two volumes; chunked mode prints full lines from chunk 1.
-    short_line = state.source_size_running == 0 or (
-        tar_volume <= 2 and state.archive_mode != "chunked"
-    )
+    short_line = state.source_size_running == 0
     if short_line:
         print(
             f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {_stats_pct_field(pct)}{mv_suffix}"
         )
         return
-    if state.archive_mode == "chunked":
-        avg_time = elapsed_time // tar_volume if tar_volume > 0 else 0
-        remain_time = avg_time * max(0, volume_cap - tar_volume)
-        if (
-            remain_time == 0
-            and pct < 100
-            and tar_volume > 0
-            and avg_time > 0
-            and state.source_size_total > 0
-            and state.source_size_running < state.source_size_total
-        ):
-            bpc = max(1, state.source_size_running // tar_volume)
-            bytes_rem = state.source_size_total - state.source_size_running
-            est_chunks = (bytes_rem + bpc - 1) // bpc
-            remain_time = avg_time * est_chunks
-    else:
-        avg_time = elapsed_time // (tar_volume - 2) if tar_volume > 2 else 0
-        raw_remain = avg_time * (archive_volumes - tar_volume + 2) if archive_volumes else 0
-        remain_time = max(0, raw_remain)
+    avg_time = elapsed_time // tar_volume if tar_volume > 0 else 0
+    remain_time = avg_time * max(0, volume_cap - tar_volume)
+    if (
+        remain_time == 0
+        and pct < 100
+        and tar_volume > 0
+        and avg_time > 0
+        and state.source_size_total > 0
+        and state.source_size_running < state.source_size_total
+    ):
+        bpc = max(1, state.source_size_running // tar_volume)
+        bytes_rem = state.source_size_total - state.source_size_running
+        est_chunks = (bytes_rem + bpc - 1) // bpc
+        remain_time = avg_time * est_chunks
     incremental_time = timestamp - state.incremental_timestamp - state.incremental_timestamp_running
-    bcs_dest = Path(state.bcs_dest)
-    if state.archive_mode == "chunked":
-        dest_size = state.dest_size_running
-    else:
-        dest_size = state.dest_size_running
-        if any(bcs_dest.glob(f"{basename}*")):
-            du = subprocess.run(
-                ["du", "-c", "--apparent-size", str(bcs_dest)],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            dest_size += int(du.stdout.strip().splitlines()[-1].split()[0])
+    dest_size = state.dest_size_running
     comp_ratio = 100 - ((dest_size * 100) // state.source_size_running) if state.source_size_running else 0
     # Dynamic column widths (legacy bash incremental_stats): running maxima keep columns aligned.
     rem_txt = duration_readable(remain_time) if remain_time > 0 else "0s"
@@ -323,16 +300,7 @@ def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) 
     avg_time = completion_time // (tar_volume - 1) if tar_volume > 1 else completion_time
     tar_overhead = state.source_size_running - state.source_size_total
     bcs_dest = Path(state.bcs_dest)
-    if state.archive_mode == "chunked":
-        dest_size_running = state.dest_size_running
-    else:
-        du = subprocess.run(
-            ["du", "-c", "--apparent-size", str(bcs_dest)],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        dest_size_running = state.dest_size_running + int(du.stdout.strip().splitlines()[-1].split()[0])
+    dest_size_running = state.dest_size_running
     comp_ratio = 100 - ((dest_size_running * 100) // state.source_size_total) if state.source_size_total else 0
     _SUMMARY_W = 34
 
@@ -344,8 +312,7 @@ def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) 
     _summary_line("Total runtime:", duration_readable(completion_time))
     _summary_line("Average time per archive file:", duration_readable(avg_time))
     _summary_line("Number of archive files:", str(tar_volume - 1))
-    if state.archive_mode == "chunked":
-        _summary_line("Large files (MV):", str(state.tier3_large_file_count))
+    _summary_line("Large files (MV):", str(state.tier3_large_file_count))
     _summary_line("Tar overhead:", _fmt_kb_scaled(tar_overhead))
     _summary_line("Total size of backup:", _fmt_kb_scaled(state.source_size_total))
     if dest_size_running:

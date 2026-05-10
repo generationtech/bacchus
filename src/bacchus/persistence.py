@@ -29,7 +29,6 @@ class RuntimeState:
     size_text_running: int = 0
     stats_line_source_seg_w: int = 0
     stats_line_dest_seg_w: int = 0
-    archive_mode: str = "chunked"
     chunk_index: int = 0
     mv_group_open: bool = False
     # Chunked backup: wall clock at run start; incremental stats use ``start_timestamp`` after preorder walk.
@@ -68,7 +67,6 @@ def initial_backup_state(
     archive_volumes: int,
     timestamp: int,
     source_size_total: int,
-    archive_mode: str = "chunked",
     wall_clock_start_timestamp: int = 0,
 ) -> RuntimeState:
     return RuntimeState(
@@ -77,7 +75,6 @@ def initial_backup_state(
         start_timestamp=timestamp,
         incremental_timestamp=timestamp,
         source_size_total=source_size_total,
-        archive_mode=archive_mode,
         wall_clock_start_timestamp=wall_clock_start_timestamp,
     )
 
@@ -89,7 +86,6 @@ def initial_restore_state(
     source_size_total: int,
     source_size_running: int,
     dest_size_running: int,
-    archive_mode: str = "chunked",
 ) -> RuntimeState:
     return RuntimeState(
         bcs_source=str(source_dir),
@@ -99,5 +95,4 @@ def initial_restore_state(
         source_size_total=source_size_total,
         source_size_running=source_size_running,
         dest_size_running=dest_size_running,
-        archive_mode=archive_mode,
     )

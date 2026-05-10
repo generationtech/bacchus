@@ -48,7 +48,7 @@ pytest tests/test_stats.py::test_fmt_kb_scaled
 
 | Path | Role |
 |------|------|
-| [`tests/test_stats.py`](../tests/test_stats.py) | Incremental stats lines, completion summaries, progress/compression formatting, chunked vs legacy behavior |
+| [`tests/test_stats.py`](../tests/test_stats.py) | Incremental stats lines, completion summaries, progress/compression formatting |
 | [`tests/test_persistence.py`](../tests/test_persistence.py) | Runtime state / persistence helpers |
 | [`tests/test_classify.py`](../tests/test_classify.py) | Tar segment classification (standalone vs GNU multi-volume) |
 | [`tests/test_backup_chunked.py`](../tests/test_backup_chunked.py) | Chunked backup pipeline edge cases |
@@ -58,7 +58,7 @@ pytest tests/test_stats.py::test_fmt_kb_scaled
 | [`tests/test_walk.py`](../tests/test_walk.py) | Source tree walking |
 | [`tests/test_ramdisk.py`](../tests/test_ramdisk.py) | Ramdisk / tmpfs related behavior (where applicable) |
 | [`tests/test_extern_tar.py`](../tests/test_extern_tar.py) | Interaction with external `tar` |
-| [`tests/test_e2e_chunked.py`](../tests/test_e2e_chunked.py) | **Integration:** small chunked and legacy roundtrips via `python -m bacchus` (including a symlink case) |
+| [`tests/test_e2e_chunked.py`](../tests/test_e2e_chunked.py) | **Integration:** small chunked roundtrips via `python -m bacchus` (including a symlink case) |
 | [`tests/test_e2e_full.py`](../tests/test_e2e_full.py) | **Heavy E2E:** large random tree, Tier-3 multi-volume check, restore, tree hash verify, regular-file counts, optional `rsync` checksum dry-run |
 | [`tests/integration/_e2e_impl.py`](../tests/integration/_e2e_impl.py) | Shared E2E implementation (`E2EConfig`, `run_e2e`, `verify_match`, rsync step) |
 | [`tests/integration/run_e2e.py`](../tests/integration/run_e2e.py) | CLI to run the full E2E outside pytest (useful for debugging) |

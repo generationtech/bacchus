@@ -256,7 +256,6 @@ def run_backup(cfg: BcsConfig) -> None:
             est_chunks,
             stats_start,
             source_size_total,
-            archive_mode="chunked",
             wall_clock_start_timestamp=wall_clock_start,
         ),
     )

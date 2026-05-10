@@ -69,7 +69,6 @@ def test_chunked_uses_single_tar_create_per_flushed_chunk(tmp_path: Path, monkey
         runstatistics=False,
         endstatistics=False,
         password="",
-        archive_mode="chunked",
     )
 
     backup_chunked.run_backup(cfg)
@@ -142,7 +141,6 @@ def test_chunked_archive_path_scope_source(tmp_path: Path, monkeypatch) -> None:
         runstatistics=False,
         endstatistics=False,
         password="",
-        archive_mode="chunked",
         archive_path_scope="source",
     )
 
@@ -215,7 +213,6 @@ def test_chunked_archive_top_dir_prefixes_members(tmp_path: Path, monkeypatch) -
         runstatistics=False,
         endstatistics=False,
         password="",
-        archive_mode="chunked",
         archive_top_dir="archive",
     )
 

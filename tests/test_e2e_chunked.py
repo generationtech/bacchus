@@ -58,8 +58,6 @@ def test_chunked_no_compress_roundtrip(tmp_path: Path) -> None:
         "off",
         "-u",
         "off",
-        "--archive-mode",
-        "chunked",
     )
     _run(
         "restore",
@@ -87,8 +85,6 @@ def test_chunked_no_compress_roundtrip(tmp_path: Path) -> None:
         "off",
         "-u",
         "off",
-        "--archive-mode",
-        "chunked",
     )
     # restored path preserves source directory name prefix
     hits = list(out.rglob("hello.txt"))
@@ -147,8 +143,6 @@ def test_chunked_symlink_target_outside_tree_roundtrip(tmp_path: Path) -> None:
         "off",
         "-u",
         "off",
-        "--archive-mode",
-        "chunked",
     )
     _run(
         "restore",
@@ -176,8 +170,6 @@ def test_chunked_symlink_target_outside_tree_roundtrip(tmp_path: Path) -> None:
         "off",
         "-u",
         "off",
-        "--archive-mode",
-        "chunked",
     )
     links = list(out.rglob("outside_link.txt"))
     assert links, f"expected outside_link.txt under {out}"
@@ -186,80 +178,3 @@ def test_chunked_symlink_target_outside_tree_roundtrip(tmp_path: Path) -> None:
     assert link.readlink() == ext_target
 
 
-def test_legacy_roundtrip(tmp_path: Path) -> None:
-    if not shutil.which("tar"):
-        return
-    src = tmp_path / "src"
-    dst = tmp_path / "dst"
-    out = tmp_path / "out"
-    src.mkdir()
-    out.mkdir()
-    (tmp_path / "tard").mkdir()
-    (tmp_path / "comp").mkdir()
-    (tmp_path / "dec").mkdir()
-    (src / "a.txt").write_text("legacy", encoding="utf-8")
-    _run(
-        "backup",
-        "-s",
-        str(src),
-        "-d",
-        str(dst),
-        "-b",
-        "leg",
-        "-v",
-        "500",
-        "-z",
-        "off",
-        "-r",
-        "off",
-        "-t",
-        str(tmp_path / "tard"),
-        "-c",
-        str(tmp_path / "comp"),
-        "-C",
-        "off",
-        "-E",
-        "off",
-        "-S",
-        "off",
-        "-W",
-        "off",
-        "-X",
-        "off",
-        "-u",
-        "off",
-        "--archive-mode",
-        "legacy",
-    )
-    _run(
-        "restore",
-        "-s",
-        str(dst),
-        "-d",
-        str(out),
-        "-b",
-        "leg",
-        "-z",
-        "off",
-        "-r",
-        "off",
-        "-e",
-        str(tmp_path / "dec"),
-        "-C",
-        "off",
-        "-E",
-        "off",
-        "-S",
-        "off",
-        "-W",
-        "off",
-        "-X",
-        "off",
-        "-u",
-        "off",
-        "--archive-mode",
-        "legacy",
-    )
-    hits = list(out.rglob("a.txt"))
-    assert hits
-    assert hits[0].read_text(encoding="utf-8") == "legacy"

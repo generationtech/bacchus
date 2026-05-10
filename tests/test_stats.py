@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import subprocess
 from pathlib import Path
 
 from bacchus import persistence, stats as statsmod
@@ -32,7 +31,6 @@ def test_incremental_stats_chunked_volume_one_full_line_with_last(capsys, tmp_pa
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         archive_volumes=10,
         start_timestamp=100,
@@ -48,20 +46,19 @@ def test_incremental_stats_chunked_volume_one_full_line_with_last(capsys, tmp_pa
     assert "last..5m" in out
 
 
-def test_incremental_stats_legacy_volume_one_short_only(capsys, tmp_path: Path) -> None:
-    """Legacy tar -cM keeps percent-only lines for the first two volumes."""
+def test_incremental_stats_backup_short_line_when_no_bytes_shipped(capsys, tmp_path: Path) -> None:
+    """No incremental line until the first chunk has non-zero shipped source size."""
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="legacy",
         bcs_dest=str(dest),
         archive_volumes=10,
         start_timestamp=100,
         incremental_timestamp=400,
-        source_size_running=5000,
-        dest_size_running=4000,
+        source_size_running=0,
+        dest_size_running=0,
     )
-    statsmod.incremental_stats_backup("test", state, "backupfile.tar", 1)
+    statsmod.incremental_stats_backup("test", state, "test.000001.tar", 1)
     out = capsys.readouterr().out.strip()
     assert "remain.." not in out
     assert "00%" in out
@@ -158,7 +155,6 @@ def test_incremental_stats_chunked_avoids_dest_du_rescan(tmp_path: Path, monkeyp
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         archive_volumes=10,
         source_size_total=100_000,
@@ -177,35 +173,10 @@ def test_incremental_stats_chunked_avoids_dest_du_rescan(tmp_path: Path, monkeyp
     assert "dest..1.5M" in out
 
 
-def test_incremental_stats_legacy_keeps_dest_du_rescan(tmp_path: Path, monkeypatch, capsys) -> None:
-    dest = tmp_path / "dest"
-    dest.mkdir()
-    (dest / "test.tar").write_text("x", encoding="utf-8")
-    state = persistence.RuntimeState(
-        archive_mode="legacy",
-        bcs_dest=str(dest),
-        archive_volumes=10,
-        source_size_total=500_000,
-        start_timestamp=100,
-        incremental_timestamp=100,
-        source_size_running=2000,
-        dest_size_running=100,
-    )
-
-    def fake_run(*args, **kwargs):
-        return subprocess.CompletedProcess(args[0], 0, stdout="123\n123 total\n")
-
-    monkeypatch.setattr(statsmod.subprocess, "run", fake_run)
-    statsmod.incremental_stats_backup("test", state, "test.tar-3", 3)
-    out = capsys.readouterr().out
-    assert "dest..223K" in out
-
-
 def test_incremental_stats_backup_volume_cap_exceeds_estimate(capsys, tmp_path: Path, monkeypatch) -> None:
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         archive_volumes=5,
         source_size_total=100_000,
@@ -227,7 +198,6 @@ def test_incremental_stats_chunked_volume_slash_matches_source_pct(capsys, tmp_p
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         archive_volumes=182,
         source_size_total=10_000,
@@ -243,12 +213,11 @@ def test_incremental_stats_chunked_volume_slash_matches_source_pct(capsys, tmp_p
     assert "/209 " in out
 
 
-def test_incremental_stats_chunked_avg_per_chunk_not_legacy_divisor(capsys, tmp_path: Path, monkeypatch) -> None:
-    """Chunked mode counts every shipped chunk; do not use legacy (tar_volume - 2) average divisor."""
+def test_incremental_stats_chunked_avg_per_chunk_not_old_divisor(capsys, tmp_path: Path, monkeypatch) -> None:
+    """Average elapsed time divides by shipped chunk count, not (tar_volume - 2)."""
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         archive_volumes=182,
         start_timestamp=0,
@@ -268,7 +237,6 @@ def test_incremental_stats_chunked_remain_shows_zero_at_full_progress(capsys, tm
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         archive_volumes=10,
         source_size_total=1000,
@@ -292,7 +260,6 @@ def test_incremental_stats_chunked_remain_fallback_when_volume_cap_equals_tar(
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         archive_volumes=10,
         source_size_total=100_000,
@@ -314,7 +281,6 @@ def test_incremental_stats_backup_tier3_shows_inner_mv_volume(capsys, tmp_path: 
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         archive_volumes=10,
         source_size_total=100_000,
@@ -338,7 +304,6 @@ def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_pa
     dest.mkdir()
     (dest / "extra.bin").write_bytes(b"x" * 5000)
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         source_size_total=200,
         source_size_running=200,
@@ -365,7 +330,6 @@ def test_completion_stats_chunked_large_file_count_nonzero(capsys, tmp_path: Pat
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         source_size_total=200,
         source_size_running=200,
@@ -387,7 +351,6 @@ def test_completion_stats_chunked_total_runtime_uses_wall_clock(capsys, tmp_path
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
-        archive_mode="chunked",
         bcs_dest=str(dest),
         source_size_total=200,
         source_size_running=200,
@@ -405,31 +368,6 @@ def test_completion_stats_chunked_total_runtime_uses_wall_clock(capsys, tmp_path
     statsmod.completion_stats_backup(state, tar_volume=2)
     out = capsys.readouterr().out
     assert re.search(r"Total runtime:\s+5m", out)
-
-
-def test_completion_stats_legacy_still_uses_du(capsys, tmp_path: Path, monkeypatch) -> None:
-    dest = tmp_path / "dest"
-    dest.mkdir()
-    state = persistence.RuntimeState(
-        archive_mode="legacy",
-        bcs_dest=str(dest),
-        source_size_total=200,
-        source_size_running=200,
-        dest_size_running=0,
-        start_timestamp=1000,
-    )
-
-    def fake_run(cmd, **kwargs):
-        assert "du" in cmd
-        return subprocess.CompletedProcess(cmd, 0, stdout="0\n100 total\n")
-
-    monkeypatch.setattr(statsmod.subprocess, "run", fake_run)
-    statsmod.completion_stats_backup(state, tar_volume=2)
-    out = capsys.readouterr().out
-    assert "Destination:" in out
-    assert str(dest) in out
-    assert "Overall compression ratio:" in out
-    assert re.search(r"Overall compression ratio:\s+50%", out)
 
 
 def test_fmt_kb_scaled() -> None:

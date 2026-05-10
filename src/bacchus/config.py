@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Optional
 
-ArchiveMode = Literal["chunked", "legacy"]
 ArchivePathScope = Literal["parent", "source"]
 
 
@@ -35,8 +34,6 @@ class BcsConfig:
     runstatistics: bool = True
     endstatistics: bool = True
     password: str = ""
-    # New (None = choose in CLI: backup defaults to chunked; restore auto-detects)
-    archive_mode: Optional[ArchiveMode] = None
     absolute_max_size_kb: Optional[int] = None  # default 8 * volumesize at resolve time
     mini_slice_size_kb: Optional[int] = None  # default volumesize
     start_chunk: int = 1

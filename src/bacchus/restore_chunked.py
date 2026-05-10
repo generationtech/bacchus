@@ -238,7 +238,6 @@ def run_restore(cfg: BcsConfig) -> None:
             source_size_total,
             0,
             0,
-            archive_mode="chunked",
         ),
     )
 

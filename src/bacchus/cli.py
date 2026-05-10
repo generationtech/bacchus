@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-from bacchus import backup_chunked, backup_legacy, restore_chunked, restore_legacy
+from bacchus import backup_chunked, restore_chunked
 from bacchus import stats as statsmod
 from bacchus.config import BcsConfig
-from bacchus import modes
 
 
 def _bool_from_store(v: str) -> bool:
@@ -108,12 +106,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             choices=["on", "off"],
             default="on",
             help="print completion statistics (default: on)",
-        )
-        sp.add_argument(
-            "--archive-mode",
-            choices=["chunked", "legacy"],
-            default=None,
-            help="chunked (default) or legacy single tar -cM stream (restore: auto-detect if omitted)",
         )
         sp.add_argument(
             "--absolute-max-size",
@@ -237,7 +229,6 @@ def _ns_to_cfg(ns: argparse.Namespace) -> BcsConfig:
         runstatistics=_bool_from_store(ns.runstatistics),
         endstatistics=_bool_from_store(ns.endstatistics),
         password=pw,
-        archive_mode=ns.archive_mode,
         absolute_max_size_kb=ns.absolute_max_size,
         mini_slice_size_kb=ns.mini_slice_size,
         start_chunk=ns.start_chunk,
@@ -251,8 +242,6 @@ def main(argv: list[str] | None = None) -> int:
     cfg = _ns_to_cfg(ns)
 
     if ns.subcommand == "backup":
-        if cfg.archive_mode is None:
-            cfg.archive_mode = "chunked"
         print("\n ====================================\n|| Running Bacchus backup operation ||\n ====================================")
         _print_options(cfg, ns)
         if not cfg.ramdisk and (cfg.compress or cfg.password):
@@ -262,36 +251,25 @@ def main(argv: list[str] | None = None) -> int:
             f"{'Volume size for archive (KiB):':<{_BACKUP_OPT_COL}}"
             f"{statsmod._fmt_kb_scaled(cfg.volumesize_kb)}"
         )
-        if cfg.archive_mode == "chunked":
-            print(
-                f"{'Absolute max chunk (KiB):':<{_BACKUP_OPT_COL}}"
-                f"{statsmod._fmt_kb_scaled(cfg.resolved_absolute_max_kb())}"
-            )
-            print(
-                f"{'Mini MV slice (KiB):':<{_BACKUP_OPT_COL}}"
-                f"{statsmod._fmt_kb_scaled(cfg.resolved_mini_slice_kb())}"
-            )
-            scope = cfg.archive_path_scope
-            top = (cfg.archive_top_dir or "").strip()
-            print(f"{'Archive path scope:':<{_BACKUP_OPT_COL}}{scope}")
-            if top:
-                print(f"{'Archive top directory name:':<{_BACKUP_OPT_COL}}{top}")
+        print(
+            f"{'Absolute max chunk (KiB):':<{_BACKUP_OPT_COL}}"
+            f"{statsmod._fmt_kb_scaled(cfg.resolved_absolute_max_kb())}"
+        )
+        print(
+            f"{'Mini MV slice (KiB):':<{_BACKUP_OPT_COL}}"
+            f"{statsmod._fmt_kb_scaled(cfg.resolved_mini_slice_kb())}"
+        )
+        scope = cfg.archive_path_scope
+        top = (cfg.archive_top_dir or "").strip()
+        print(f"{'Archive path scope:':<{_BACKUP_OPT_COL}}{scope}")
+        if top:
+            print(f"{'Archive top directory name:':<{_BACKUP_OPT_COL}}{top}")
         print()
         _confirm_start(cfg, ns)
-        if cfg.archive_mode == "legacy":
-            backup_legacy.run_backup(cfg)
-        else:
-            backup_chunked.run_backup(cfg)
+        backup_chunked.run_backup(cfg)
         return 0
 
     if ns.subcommand == "restore":
-        if cfg.archive_mode is None:
-            try:
-                cfg.archive_mode = modes.infer_archive_mode(cfg.source.resolve(), cfg.basename)
-            except ValueError as e:
-                print(str(e), file=sys.stderr)
-                return 1
-
         print("\n =====================================\n|| Running Bacchus restore operation ||\n =====================================")
         _print_options(cfg, ns)
         if cfg.password and not cfg.ramdisk:
@@ -299,10 +277,7 @@ def main(argv: list[str] | None = None) -> int:
         print()
         _confirm_start(cfg, ns)
 
-        if cfg.archive_mode == "legacy":
-            restore_legacy.run_restore(cfg)
-        else:
-            restore_chunked.run_restore(cfg)
+        restore_chunked.run_restore(cfg)
         return 0
 
     return 1
