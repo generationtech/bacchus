@@ -64,7 +64,7 @@ def test_incremental_stats_legacy_volume_one_short_only(capsys, tmp_path: Path) 
     statsmod.incremental_stats_backup("test", state, "backupfile.tar", 1)
     out = capsys.readouterr().out.strip()
     assert "remain.." not in out
-    assert "0%" in out
+    assert "00%" in out
 
 
 def test_incremental_stats_restore_line_has_spaces(capsys, monkeypatch) -> None:
@@ -218,7 +218,7 @@ def test_incremental_stats_backup_volume_cap_exceeds_estimate(capsys, tmp_path: 
     statsmod.incremental_stats_backup("test", state, "test.000010.tar", 10)
     out = capsys.readouterr().out
     assert "/12 " in out
-    assert " 90%" in out
+    assert "90%" in out
     assert "23h" not in out
 
 
@@ -239,7 +239,7 @@ def test_incremental_stats_chunked_volume_slash_matches_source_pct(capsys, tmp_p
     monkeypatch.setattr(statsmod.time, "time", lambda: 100)
     statsmod.incremental_stats_backup("test", state, "test.000077.tar", 77)
     out = capsys.readouterr().out
-    assert " 37%" in out
+    assert "37%" in out
     assert "/209 " in out
 
 
@@ -281,7 +281,7 @@ def test_incremental_stats_chunked_remain_shows_zero_at_full_progress(capsys, tm
     monkeypatch.setattr(statsmod.time, "time", lambda: 1000)
     statsmod.incremental_stats_backup("test", state, "test.000010.tar", 10)
     out = capsys.readouterr().out
-    assert " 100%" in out
+    assert "100%" in out
     assert "remain..0s" in out
 
 
@@ -306,7 +306,7 @@ def test_incremental_stats_chunked_remain_fallback_when_volume_cap_equals_tar(
     monkeypatch.setattr(statsmod, "_chunked_volume_total_display", lambda st, tv: tv)
     statsmod.incremental_stats_backup("test", state, "test.000010.tar", 10)
     out = capsys.readouterr().out
-    assert " 99%" in out
+    assert "99%" in out
     assert re.search(r"remain\.\.[1-9]", out), f"expected non-zero remain duration in {out!r}"
 
 

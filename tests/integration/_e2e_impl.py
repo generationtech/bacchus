@@ -193,6 +193,53 @@ def _scan_tree(root: Path) -> dict[str, TreeEntry]:
     return out
 
 
+def _count_regular_files(root: Path) -> int:
+    """Like ``find -type f``: regular files only (exclude symlink paths)."""
+    return sum(1 for p in root.rglob("*") if not p.is_symlink() and p.is_file())
+
+
+def _verify_rsync_mirror_checksum(src_root: Path, dst_root: Path) -> None:
+    """
+    Dry-run rsync with checksums; empty itemized output means no transfers needed.
+
+    Skips non-regular entries rsync would skip (FIFO/socket/device); this harness does
+    not create them by default.
+    """
+    rsync_bin = shutil.which("rsync")
+    if rsync_bin is None:
+        print(
+            "E2E: rsync not found; skipping checksum mirror verification.",
+            file=sys.stderr,
+        )
+        return
+    src = src_root.resolve()
+    dst = dst_root.resolve()
+    r = subprocess.run(
+        [
+            rsync_bin,
+            "-rlcin",
+            "--checksum",
+            "--omit-dir-times",
+            "--delete",
+            f"{src}/",
+            f"{dst}/",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(
+            f"rsync checksum dry-run failed ({r.returncode})\nstdout:\n{r.stdout}\nstderr:\n{r.stderr}"
+        )
+    out = (r.stdout or "").strip()
+    err = (r.stderr or "").strip()
+    if out or err:
+        raise AssertionError(
+            "rsync checksum dry-run reported differences or unexpected output.\n"
+            f"stdout:\n{r.stdout}\nstderr:\n{r.stderr}"
+        )
+
+
 def verify_match(src_root: Path, dst_root: Path, max_report: int = 20) -> None:
     a = _scan_tree(src_root)
     b = _scan_tree(dst_root)
@@ -417,6 +464,16 @@ def run_e2e(cfg: E2EConfig) -> int:
 
         verify_src = restored_root / src_root.name
         verify_match(src_root, verify_src)
+
+        n_reg_src = _count_regular_files(src_root)
+        n_reg_dst = _count_regular_files(verify_src)
+        if n_reg_src != n_reg_dst:
+            raise AssertionError(
+                f"regular file count mismatch (find -type f semantics): "
+                f"source={n_reg_src} restored={n_reg_dst}"
+            )
+
+        _verify_rsync_mirror_checksum(src_root, verify_src)
 
         n_files = sum(1 for p in src_root.rglob("*") if p.is_file())
         n_dirs = sum(1 for p in src_root.rglob("*") if p.is_dir())

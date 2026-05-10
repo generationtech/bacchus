@@ -12,7 +12,10 @@ from tests.integration._e2e_impl import E2EConfig, run_e2e
 def main(argv: list[str] | None = None) -> int:
     d = E2EConfig()
     p = argparse.ArgumentParser(
-        description="Run Bacchus chunked E2E: random source tree, backup, Tier-3 check, restore, byte verify.",
+        description=(
+            "Run Bacchus chunked E2E: random source tree, backup, Tier-3 check, restore, "
+            "byte verify, regular-file counts, and rsync checksum dry-run when rsync is installed."
+        ),
     )
     p.add_argument("--total-bytes", type=int, default=d.total_bytes, help="total random data (default: %(default)s)")
     p.add_argument("--workdir", type=Path, default=None, help="work directory (default: auto under $TMPDIR)")

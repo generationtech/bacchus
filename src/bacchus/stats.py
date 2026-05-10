@@ -100,6 +100,27 @@ def _fmt_kb_scaled(kb: int) -> str:
     return f"{num}{suffixes[u]}"
 
 
+def _fmt_stats_pct(pct: int) -> str:
+    """Progress percent for stats lines: always two digits before % until 100."""
+    pct = max(0, min(100, pct))
+    if pct == 100:
+        return "100%"
+    return f"{pct:02d}%"
+
+
+def _stats_pct_field(pct: int) -> str:
+    """Fixed-width token so ``09%`` and ``100%`` align with following columns."""
+    return f"{_fmt_stats_pct(pct):<4}"
+
+
+def _fmt_stats_compr_digits(comp_ratio: int) -> str:
+    """Compression ratio digits (no %%); zero-pad 0–99, ``100`` when full."""
+    cr = max(0, min(100, comp_ratio))
+    if cr == 100:
+        return "100"
+    return f"{cr:02d}"
+
+
 def incremental_stats_backup(
     basename: str,
     state: "persistence.RuntimeState",
@@ -132,7 +153,7 @@ def incremental_stats_backup(
     )
     if short_line:
         print(
-            f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%{mv_suffix}"
+            f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {_stats_pct_field(pct)}{mv_suffix}"
         )
         return
     if state.archive_mode == "chunked":
@@ -185,7 +206,7 @@ def incremental_stats_backup(
     state.avg_text_size_running = max(state.avg_text_size_running, len(avg_txt))
     avg_w = state.avg_text_size_running + 7
 
-    cr_txt = str(comp_ratio)
+    cr_txt = _fmt_stats_compr_digits(comp_ratio)
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_txt))
     compr_w = state.comp_ratio_text_size_running + 10
 
@@ -198,7 +219,7 @@ def incremental_stats_backup(
 
     date_s = time.strftime("%m-%d-%Y %H:%M:%S", time.localtime(timestamp))
     line = (
-        f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {pct:4d}%  "
+        f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {_stats_pct_field(pct)}  "
         f"{'remain..' + rem_txt:<{remain_w}s}"
         f"{'elapsed..' + el_txt:<{elapsed_w}s}"
         f"{'last..' + inc_txt:<{last_w}s}"
@@ -269,7 +290,7 @@ def incremental_stats_restore(
     state.avg_text_size_running = max(state.avg_text_size_running, len(avg_txt))
     avg_w = state.avg_text_size_running + 7
 
-    cr_txt = str(comp_ratio)
+    cr_txt = _fmt_stats_compr_digits(comp_ratio)
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_txt))
     compr_w = state.comp_ratio_text_size_running + 10
 
@@ -281,7 +302,7 @@ def incremental_stats_restore(
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
     line = (
-        f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} {pct:4d}%  "
+        f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} {_stats_pct_field(pct)}  "
         f"{'remain..' + rem_txt:<{remain_w}s}"
         f"{'elapsed..' + el_txt:<{elapsed_w}s}"
         f"{'last..' + inc_txt:<{last_w}s}"
