@@ -155,6 +155,44 @@ def _fmt_stats_compr_digits(comp_ratio: int) -> str:
     return f"{cr:02d}"
 
 
+def _emit_incremental_stats_full_line(
+    *,
+    prefix: str,
+    remain_full: str,
+    elapsed_seg: str,
+    last_full: str,
+    avg_full: str,
+    compr_seg: str,
+    src_seg: str,
+    dst_seg: str,
+    state: "persistence.RuntimeState",
+    date_s: str,
+    mv_tail: str,
+) -> None:
+    """
+    Single layout path for backup and restore full incremental rows.
+
+    Requires :attr:`~bacchus.persistence.RuntimeState.stats_line_*` widths to already
+    reflect this row's segments (running maxima updated before calling).
+    """
+    tail = STATS_INCREMENTAL_COL_GAP.join(
+        [
+            elapsed_seg.ljust(state.stats_line_elapsed_seg_w),
+            last_full.ljust(state.stats_line_last_seg_w),
+            avg_full.ljust(state.stats_line_avg_seg_w),
+            compr_seg,
+            src_seg.ljust(state.stats_line_source_seg_w),
+            dst_seg.ljust(state.stats_line_dest_seg_w),
+        ]
+    )
+    body = (
+        remain_full.ljust(state.stats_line_remain_seg_w)
+        + STATS_INCREMENTAL_COL_GAP
+        + tail
+    )
+    print(prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail)
+
+
 def incremental_stats_backup(
     basename: str,
     state: "persistence.RuntimeState",
@@ -210,7 +248,6 @@ def incremental_stats_backup(
     state.remain_text_size_running = max(state.remain_text_size_running, len(rem_txt))
     remain_full = "remain.." + rem_txt
     state.stats_line_remain_seg_w = max(state.stats_line_remain_seg_w, len(remain_full))
-    remain_w = max(state.stats_line_remain_seg_w, len(remain_full))
 
     el_txt = duration_readable(elapsed_time)
     elapsed_seg = "elapsed.." + el_txt
@@ -227,13 +264,11 @@ def incremental_stats_backup(
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
     last_full = "last.." + inc_txt
     state.stats_line_last_seg_w = max(state.stats_line_last_seg_w, len(last_full))
-    last_w = max(state.stats_line_last_seg_w, len(last_full))
 
     avg_txt = duration_readable(avg_time)
     state.avg_text_size_running = max(state.avg_text_size_running, len(avg_txt))
     avg_full = "avg.." + avg_txt
     state.stats_line_avg_seg_w = max(state.stats_line_avg_seg_w, len(avg_full))
-    avg_w = max(state.stats_line_avg_seg_w, len(avg_full))
 
     cr_legacy = _fmt_stats_compr_digits(comp_ratio)
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_legacy))
@@ -253,26 +288,23 @@ def incremental_stats_backup(
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
     date_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
-    elapsed_col_w = state.stats_line_elapsed_seg_w
-    src_w = state.stats_line_source_seg_w
-    dst_w = state.stats_line_dest_seg_w
     prefix = (
         f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} "
         f"{_stats_pct_field(pct)}{STATS_INCREMENTAL_COL_GAP}"
     )
-    tail = STATS_INCREMENTAL_COL_GAP.join(
-        [
-            elapsed_seg.ljust(elapsed_col_w),
-            last_full.ljust(last_w),
-            avg_full.ljust(avg_w),
-            compr_seg,
-            src_seg.ljust(src_w),
-            dst_seg.ljust(dst_w),
-        ]
+    _emit_incremental_stats_full_line(
+        prefix=prefix,
+        remain_full=remain_full,
+        elapsed_seg=elapsed_seg,
+        last_full=last_full,
+        avg_full=avg_full,
+        compr_seg=compr_seg,
+        src_seg=src_seg,
+        dst_seg=dst_seg,
+        state=state,
+        date_s=date_s,
+        mv_tail=mv_tail,
     )
-    body = remain_full.ljust(remain_w) + STATS_INCREMENTAL_COL_GAP + tail
-    line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail
-    print(line)
 
 
 def incremental_stats_restore(
@@ -284,6 +316,7 @@ def incremental_stats_restore(
     tier3_mv_group: int | None = None,
     tier3_inner_mv_vol: int | None = None,
 ) -> None:
+    """Restore incremental row; full lines use :func:`_emit_incremental_stats_full_line` like backup."""
     archive_volumes = state.archive_volumes
     vol_den_w = max(len(str(archive_volumes)), len(str(tar_volume)))
     archive_max_name = len(basename) + vol_den_w + 6
@@ -324,7 +357,6 @@ def incremental_stats_restore(
     state.remain_text_size_running = max(state.remain_text_size_running, len(rem_txt))
     remain_full = "remain.." + rem_txt
     state.stats_line_remain_seg_w = max(state.stats_line_remain_seg_w, len(remain_full))
-    remain_w = max(state.stats_line_remain_seg_w, len(remain_full))
 
     el_txt = duration_readable(elapsed_time)
     elapsed_seg = "elapsed.." + el_txt
@@ -341,13 +373,11 @@ def incremental_stats_restore(
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
     last_full = "last.." + inc_txt
     state.stats_line_last_seg_w = max(state.stats_line_last_seg_w, len(last_full))
-    last_w = max(state.stats_line_last_seg_w, len(last_full))
 
     avg_txt = duration_readable(avg_time)
     state.avg_text_size_running = max(state.avg_text_size_running, len(avg_txt))
     avg_full = "avg.." + avg_txt
     state.stats_line_avg_seg_w = max(state.stats_line_avg_seg_w, len(avg_full))
-    avg_w = max(state.stats_line_avg_seg_w, len(avg_full))
 
     cr_legacy = _fmt_stats_compr_digits(comp_ratio)
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_legacy))
@@ -366,27 +396,24 @@ def incremental_stats_restore(
     state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
-    elapsed_col_w = state.stats_line_elapsed_seg_w
-    src_w = state.stats_line_source_seg_w
-    dst_w = state.stats_line_dest_seg_w
     date_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
     prefix = (
         f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} "
         f"{_stats_pct_field(pct)}{STATS_INCREMENTAL_COL_GAP}"
     )
-    tail = STATS_INCREMENTAL_COL_GAP.join(
-        [
-            elapsed_seg.ljust(elapsed_col_w),
-            last_full.ljust(last_w),
-            avg_full.ljust(avg_w),
-            compr_seg,
-            src_seg.ljust(src_w),
-            dst_seg.ljust(dst_w),
-        ]
+    _emit_incremental_stats_full_line(
+        prefix=prefix,
+        remain_full=remain_full,
+        elapsed_seg=elapsed_seg,
+        last_full=last_full,
+        avg_full=avg_full,
+        compr_seg=compr_seg,
+        src_seg=src_seg,
+        dst_seg=dst_seg,
+        state=state,
+        date_s=date_s,
+        mv_tail=mv_tail,
     )
-    body = remain_full.ljust(remain_w) + STATS_INCREMENTAL_COL_GAP + tail
-    line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail
-    print(line)
 
 
 def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) -> None:

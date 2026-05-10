@@ -127,6 +127,7 @@ def test_incremental_stats_restore_line_has_spaces(capsys, monkeypatch) -> None:
     assert re.search(r"source\.\.\S+\s+dest\.\.\S+\s+[0-9]{4}-[0-9]{2}", out), (
         f"expected scaled source/dest and space before date in: {out!r}"
     )
+    _assert_incremental_line_gutters(out, expect_mv=False)
 
 
 def test_incremental_stats_restore_volume_one_shows_remain(capsys, monkeypatch) -> None:
@@ -164,9 +165,10 @@ def test_incremental_stats_restore_tier3_suffix(capsys, monkeypatch) -> None:
         tier3_mv_group=2,
         tier3_inner_mv_vol=4,
     )
-    out = capsys.readouterr().out
+    out = capsys.readouterr().out.strip()
     assert "[L2 MV 4]" in out
     assert re.search(r"\d{2}:\d{2}:\d{2}  \[L2 MV 4\]", out)
+    _assert_incremental_line_gutters(out, expect_mv=True)
 
 
 def test_incremental_stats_restore_last_reflects_incremental_timestamp(capsys, monkeypatch) -> None:
