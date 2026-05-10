@@ -9,6 +9,9 @@ from pathlib import Path
 
 from bacchus import persistence
 
+# Fixed gutter between incremental stats columns (after pct field through timestamp).
+STATS_INCREMENTAL_COL_GAP = "  "
+
 
 def duration_readable(total_seconds: int) -> str:
     string_date = ""
@@ -169,15 +172,16 @@ def incremental_stats_backup(
     incremental_time = timestamp - state.incremental_timestamp - state.incremental_timestamp_running
     dest_size = state.dest_size_running
     comp_ratio = 100 - ((dest_size * 100) // state.source_size_running) if state.source_size_running else 0
-    # Dynamic column widths (legacy bash incremental_stats): running maxima keep columns aligned.
+    # Dynamic column widths (running maxima); columns separated by STATS_INCREMENTAL_COL_GAP.
     rem_txt = duration_readable(remain_time) if remain_time > 0 else "0s"
     state.remain_text_size_running = max(state.remain_text_size_running, len(rem_txt))
-    remain_w = state.remain_text_size_running + 10
+    remain_full = "remain.." + rem_txt
+    state.stats_line_remain_seg_w = max(state.stats_line_remain_seg_w, len(remain_full))
+    remain_w = max(state.stats_line_remain_seg_w, len(remain_full))
 
     el_txt = duration_readable(elapsed_time)
     elapsed_seg = "elapsed.." + el_txt
-    # +1 trailing slot so ``last..`` never abuts ``elapsed..`` when width equals text length.
-    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg) + 1)
+    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
@@ -205,18 +209,29 @@ def incremental_stats_backup(
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
     date_s = time.strftime("%m-%d-%Y %H:%M:%S", time.localtime(timestamp))
-    elapsed_col_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg) + 1)
-    line = (
-        f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {_stats_pct_field(pct)}  "
-        f"{'remain..' + rem_txt:<{remain_w}s}"
-        f"{elapsed_seg:<{elapsed_col_w}s}"
-        f"{'last..' + inc_txt:<{last_w}s}"
-        f"{'avg..' + avg_txt:<{avg_w}s}"
-        f"{'compr..' + cr_txt + '%':<{compr_w}s}"
-        f"{src_seg:<{state.stats_line_source_seg_w}s} "
-        f"{dst_seg:<{state.stats_line_dest_seg_w}s} "
-        f"{date_s}{mv_suffix}"
+    elapsed_col_w = max(
+        state.stats_line_elapsed_seg_w,
+        state.stats_line_remain_seg_w,
+        len(elapsed_seg),
     )
+    src_w = state.stats_line_source_seg_w
+    dst_w = state.stats_line_dest_seg_w
+    prefix = (
+        f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} "
+        f"{_stats_pct_field(pct)}{STATS_INCREMENTAL_COL_GAP}"
+    )
+    body = STATS_INCREMENTAL_COL_GAP.join(
+        [
+            remain_full.ljust(remain_w),
+            elapsed_seg.ljust(elapsed_col_w),
+            ("last.." + inc_txt).ljust(last_w),
+            ("avg.." + avg_txt).ljust(avg_w),
+            ("compr.." + cr_txt + "%").ljust(compr_w),
+            src_seg.ljust(src_w),
+            dst_seg.ljust(dst_w),
+        ]
+    )
+    line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_suffix
     print(line)
 
 
@@ -266,11 +281,13 @@ def incremental_stats_restore(
 
     rem_txt = duration_readable(remain_time) if remain_time > 0 else "0s"
     state.remain_text_size_running = max(state.remain_text_size_running, len(rem_txt))
-    remain_w = state.remain_text_size_running + 10
+    remain_full = "remain.." + rem_txt
+    state.stats_line_remain_seg_w = max(state.stats_line_remain_seg_w, len(remain_full))
+    remain_w = max(state.stats_line_remain_seg_w, len(remain_full))
 
     el_txt = duration_readable(elapsed_time)
     elapsed_seg = "elapsed.." + el_txt
-    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg) + 1)
+    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
@@ -297,18 +314,30 @@ def incremental_stats_restore(
     state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
-    elapsed_col_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg) + 1)
-    line = (
-        f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} {_stats_pct_field(pct)}  "
-        f"{'remain..' + rem_txt:<{remain_w}s}"
-        f"{elapsed_seg:<{elapsed_col_w}s}"
-        f"{'last..' + inc_txt:<{last_w}s}"
-        f"{'avg..' + avg_txt:<{avg_w}s}"
-        f"{'compr..' + cr_txt + '%':<{compr_w}s}"
-        f"{src_seg:<{state.stats_line_source_seg_w}s} "
-        f"{dst_seg:<{state.stats_line_dest_seg_w}s} "
-        f"{time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(timestamp))}{mv_suffix}"
+    elapsed_col_w = max(
+        state.stats_line_elapsed_seg_w,
+        state.stats_line_remain_seg_w,
+        len(elapsed_seg),
     )
+    src_w = state.stats_line_source_seg_w
+    dst_w = state.stats_line_dest_seg_w
+    date_s = time.strftime("%m-%d-%Y %H:%M:%S", time.localtime(timestamp))
+    prefix = (
+        f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} "
+        f"{_stats_pct_field(pct)}{STATS_INCREMENTAL_COL_GAP}"
+    )
+    body = STATS_INCREMENTAL_COL_GAP.join(
+        [
+            remain_full.ljust(remain_w),
+            elapsed_seg.ljust(elapsed_col_w),
+            ("last.." + inc_txt).ljust(last_w),
+            ("avg.." + avg_txt).ljust(avg_w),
+            ("compr.." + cr_txt + "%").ljust(compr_w),
+            src_seg.ljust(src_w),
+            dst_seg.ljust(dst_w),
+        ]
+    )
+    line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_suffix
     print(line)
 
 

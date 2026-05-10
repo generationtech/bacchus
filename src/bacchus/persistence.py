@@ -30,6 +30,7 @@ class RuntimeState:
     stats_line_source_seg_w: int = 0
     stats_line_dest_seg_w: int = 0
     stats_volume_cap_chars_max: int = 0
+    stats_line_remain_seg_w: int = 0
     stats_line_elapsed_seg_w: int = 0
     chunk_index: int = 0
     mv_group_open: bool = False
