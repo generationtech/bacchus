@@ -176,7 +176,8 @@ def incremental_stats_backup(
 
     el_txt = duration_readable(elapsed_time)
     elapsed_seg = "elapsed.." + el_txt
-    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
+    # +1 trailing slot so ``last..`` never abuts ``elapsed..`` when width equals text length.
+    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg) + 1)
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
@@ -204,10 +205,11 @@ def incremental_stats_backup(
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
     date_s = time.strftime("%m-%d-%Y %H:%M:%S", time.localtime(timestamp))
+    elapsed_col_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg) + 1)
     line = (
         f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {_stats_pct_field(pct)}  "
         f"{'remain..' + rem_txt:<{remain_w}s}"
-        f"{elapsed_seg:<{state.stats_line_elapsed_seg_w}s}"
+        f"{elapsed_seg:<{elapsed_col_w}s}"
         f"{'last..' + inc_txt:<{last_w}s}"
         f"{'avg..' + avg_txt:<{avg_w}s}"
         f"{'compr..' + cr_txt + '%':<{compr_w}s}"
@@ -268,7 +270,7 @@ def incremental_stats_restore(
 
     el_txt = duration_readable(elapsed_time)
     elapsed_seg = "elapsed.." + el_txt
-    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
+    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg) + 1)
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
@@ -295,10 +297,11 @@ def incremental_stats_restore(
     state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
+    elapsed_col_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg) + 1)
     line = (
         f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} {_stats_pct_field(pct)}  "
         f"{'remain..' + rem_txt:<{remain_w}s}"
-        f"{elapsed_seg:<{state.stats_line_elapsed_seg_w}s}"
+        f"{elapsed_seg:<{elapsed_col_w}s}"
         f"{'last..' + inc_txt:<{last_w}s}"
         f"{'avg..' + avg_txt:<{avg_w}s}"
         f"{'compr..' + cr_txt + '%':<{compr_w}s}"
