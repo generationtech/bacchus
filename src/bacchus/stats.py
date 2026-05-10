@@ -136,9 +136,15 @@ def _fmt_compr_ratio_pct(comp_ratio: int) -> str:
 
 
 def _fmt_stats_compr_segment(comp_ratio: int) -> str:
-    """Fixed-width ``compr..NN%`` / ``compr..100%`` so the compr→source gap stays two spaces."""
+    """
+    ``compr..`` stats column: single-digit uses one space after ``..`` (``compr.. 8%``),
+    two-digit is flush (``compr..10%``); ``100%`` is three digits after ``..``.
+    Width matches for 0–99 so the compr→source gutter stays two spaces with no pad inside compr.
+    """
     cr = max(0, min(100, comp_ratio))
-    return "compr.." + f"{cr:>3}%"
+    if cr < 10:
+        return f"compr.. {cr}%"
+    return f"compr..{cr}%"
 
 
 def _fmt_stats_compr_digits(comp_ratio: int) -> str:

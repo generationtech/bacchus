@@ -447,9 +447,12 @@ def test_fmt_compr_ratio_pct_natural_width() -> None:
 
 
 def test_fmt_stats_compr_segment_fixed_width() -> None:
-    assert statsmod._fmt_stats_compr_segment(0) == "compr..  0%"
-    assert statsmod._fmt_stats_compr_segment(8) == "compr..  8%"
-    assert len(statsmod._fmt_stats_compr_segment(3)) == len(statsmod._fmt_stats_compr_segment(100))
+    assert statsmod._fmt_stats_compr_segment(0) == "compr.. 0%"
+    assert statsmod._fmt_stats_compr_segment(8) == "compr.. 8%"
+    assert statsmod._fmt_stats_compr_segment(10) == "compr..10%"
+    assert statsmod._fmt_stats_compr_segment(42) == "compr..42%"
+    assert statsmod._fmt_stats_compr_segment(100) == "compr..100%"
+    assert len(statsmod._fmt_stats_compr_segment(8)) == len(statsmod._fmt_stats_compr_segment(42))
 
 
 def test_incremental_stats_elapsed_column_seeded_from_first_remain(capsys, tmp_path: Path, monkeypatch) -> None:
