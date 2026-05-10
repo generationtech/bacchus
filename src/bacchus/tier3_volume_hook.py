@@ -11,6 +11,7 @@ from pathlib import Path
 
 from bacchus import persistence, stats as statsmod
 from bacchus.backup_chunked import _mini_tar_volume
+from bacchus.destination_swap import ensure_backup_destination_space
 from bacchus.pipeline import du_sk_apparent, ship_raw_tar
 
 
@@ -26,7 +27,6 @@ def main() -> None:
     st = json.loads(state_path.read_text())
     chunk_seq = int(st["chunk_seq"])
     basename = st["basename"]
-    dest = Path(st["dest"])
     compress = st["compress"]
     password = str(st.get("password", ""))
     compressdir = Path(st["compressdir"])
@@ -40,6 +40,16 @@ def main() -> None:
     raw_path = tararchivedir / tar_base
     slice_idx = _mini_tar_volume(tar_base) or 1
     mv_group = int(st.get("mv_group", 1))
+
+    lowdisk = int(os.environ.get("BCS_LOWDISKSPACE", "2"))
+    volumesize_kb = int(os.environ.get("BCS_VOLUMESIZE", "100000"))
+    dest = ensure_backup_destination_space(
+        datafile,
+        volumesize_kb=volumesize_kb,
+        lowdisk_multiplier=lowdisk,
+    )
+    st["dest"] = str(dest)
+    state_path.write_text(json.dumps(st), encoding="utf-8")
 
     rt = persistence.load(datafile)
     rt.source_size_running += du_sk_apparent(raw_path)

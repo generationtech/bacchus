@@ -151,6 +151,7 @@ def gpg_encrypt(password: str, src: Path, dst: Path) -> None:
     )
     proc.communicate(password.encode("utf-8"))
     if proc.returncode != 0:
+        dst.unlink(missing_ok=True)
         raise subprocess.CalledProcessError(proc.returncode, "gpg")
 
 

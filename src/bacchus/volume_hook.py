@@ -17,6 +17,7 @@ from pathlib import Path
 
 from bacchus import persistence
 from bacchus import stats as statsmod
+from bacchus.destination_swap import ensure_backup_destination_space
 from bacchus.pipeline import du_sk_apparent, ship_raw_tar
 
 
@@ -46,7 +47,6 @@ def _restore_member_filename(tar_base: str, tar_volume: int) -> str:
 
 def backup_new_volume() -> None:
     """Port of bacchus-backup-new-volume.sh"""
-    state = _load()
     tar_archive = os.environ.get("TAR_ARCHIVE", "")
     tar_volume = int(os.environ.get("TAR_VOLUME", "1"))
     tar_subcommand = os.environ.get("TAR_SUBCOMMAND", "-c")
@@ -59,49 +59,16 @@ def backup_new_volume() -> None:
     tar_base = Path(tar_archive).name
     vol_piece = _backup_next_piece_name(tar_base, tar_volume)
 
-    bcs_dest = Path(state.bcs_dest)
+    datafile = Path(os.environ["BCS_DATAFILE"])
     lowdisk = int(os.environ.get("BCS_LOWDISKSPACE", "2"))
     volumesize_kb = int(os.environ.get("BCS_VOLUMESIZE", "100000"))
-    newpath = None
-    oldpath = str(bcs_dest)
-    stop_timestamp = 0
+    bcs_dest = ensure_backup_destination_space(
+        datafile,
+        volumesize_kb=volumesize_kb,
+        lowdisk_multiplier=lowdisk,
+    )
 
-    while True:
-        df = subprocess.run(
-            ["df", "-kP", str(bcs_dest)], capture_output=True, text=True, check=True
-        )
-        lines = [ln for ln in df.stdout.splitlines() if ln.strip()]
-        availablespace = int(lines[-1].split()[3])
-        lowspace = volumesize_kb * lowdisk
-        if availablespace < lowspace:
-            stop_timestamp = int(time.time())
-            print(
-                f"\nLOW AVAILABLE SPACE on {bcs_dest} ({availablespace}k < {lowspace}k)\n"
-                "Either free-up space, or swap out the storage device,\n"
-                "or enter a new destination path here.\n"
-                "Press enter when ready\n"
-            )
-            newpath = input().strip()
-            print()
-            if newpath:
-                bcs_dest = Path(newpath)
-                state.bcs_dest = str(bcs_dest)
-        else:
-            if newpath:
-                du = subprocess.run(
-                    ["du", "-c", "--apparent-size", str(oldpath)],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                )
-                last = du.stdout.strip().splitlines()[-1].split()[0]
-                state.dest_size_running += int(last)
-                newpath = None
-                resume_ts = int(time.time())
-                state.start_timestamp_running += resume_ts - stop_timestamp
-                state.incremental_timestamp_running += resume_ts - stop_timestamp
-            break
-
+    state = _load()
     source_path = Path(tararchivedir) / tar_base
     archive_source_size = du_sk_apparent(source_path)
     state.source_size_running += archive_source_size

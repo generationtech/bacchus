@@ -14,6 +14,7 @@ from pathlib import Path
 from bacchus import extern, persistence, ramdisk
 from bacchus import stats as statsmod
 from bacchus.config import BcsConfig
+from bacchus.destination_swap import ensure_backup_destination_space
 from bacchus.pipeline import du_sk_apparent, ship_raw_tar
 from bacchus.walk import iter_files_from_ordered_paths, iter_source_paths_tar_order
 
@@ -112,7 +113,6 @@ def _tier3(
     cfg: BcsConfig,
     tardir: Path,
     compressdir: Path,
-    dest: Path,
     datafile: Path,
     tmp_prefix: Path,
     chunk_index: int,
@@ -122,12 +122,13 @@ def _tier3(
     rt.tier3_large_file_count += 1
     mv_group = rt.tier3_large_file_count
     persistence.save(datafile, rt)
+    rt = persistence.load(datafile)
     tier3_state.write_text(
         json.dumps(
             {
                 "chunk_seq": chunk_index,
                 "basename": cfg.basename,
-                "dest": str(dest),
+                "dest": rt.bcs_dest,
                 "compress": cfg.compress,
                 "password": cfg.password,
                 "compressdir": str(compressdir),
@@ -145,7 +146,13 @@ def _tier3(
     volno.write_text("1\n", encoding="utf-8")
     mini_first = tardir / "mini.tar"
 
-    env = {"BCS_DATAFILE": str(datafile), "BCS_TIER3_STATE": str(tier3_state)}
+    env = {
+        "BCS_DATAFILE": str(datafile),
+        "BCS_TIER3_STATE": str(tier3_state),
+        # Inner ``tar -cM`` slices: threshold matches legacy ``volume * BCS_LOWDISKSPACE`` per slice.
+        "BCS_VOLUMESIZE": str(cfg.resolved_mini_slice_kb()),
+        "BCS_LOWDISKSPACE": str(cfg.lowdiskspace_multiplier),
+    }
     extern.tar_create_multivolume_single_member(
         tar_cwd.resolve(),
         member_rel,
@@ -164,9 +171,23 @@ def _tier3(
         seq = int(st["chunk_seq"])
         member = f"{cfg.basename}.{seq:06d}.tar"
         inner_mv = _mini_tar_volume(last_raw.name) or 1
+        dest_live = ensure_backup_destination_space(
+            datafile,
+            volumesize_kb=cfg.resolved_mini_slice_kb(),
+            lowdisk_multiplier=cfg.lowdiskspace_multiplier,
+        )
+        st["dest"] = str(dest_live)
+        tier3_state.write_text(json.dumps(st), encoding="utf-8")
         # Size before ship: ``ship_raw_tar`` moves ``last_raw`` out of ``tardir`` (often ``replace``).
         extra_kb = du_sk_apparent(last_raw)
-        final_path = ship_raw_tar(last_raw, dest, member, compress=cfg.compress, password=cfg.password, compressdir=compressdir)
+        final_path = ship_raw_tar(
+            last_raw,
+            dest_live,
+            member,
+            compress=cfg.compress,
+            password=cfg.password,
+            compressdir=compressdir,
+        )
         rt = persistence.load(datafile)
         rt.source_size_running += extra_kb
         rt.dest_size_running += du_sk_apparent(final_path)
@@ -209,10 +230,9 @@ def run_backup(cfg: BcsConfig) -> None:
     rd: ramdisk.Ramdisk | None = None
     tardir = cfg.tardir.resolve()
     compressdir = cfg.compressdir.resolve()
-    dest = cfg.dest.resolve()
 
     if not cfg.compress and not cfg.password:
-        tardir = dest
+        tardir = cfg.dest.resolve()
     elif cfg.ramdisk and (cfg.compress or cfg.password):
         max_chunk_kb = max(
             cfg.volumesize_kb,
@@ -260,7 +280,7 @@ def run_backup(cfg: BcsConfig) -> None:
     persistence.save(
         tmp_runtime,
         persistence.initial_backup_state(
-            dest,
+            cfg.dest.resolve(),
             est_chunks,
             stats_start,
             source_size_total,
@@ -282,11 +302,21 @@ def run_backup(cfg: BcsConfig) -> None:
         if current_tar.exists():
             current_tar.unlink()
         extern.tar_create_archive(pending_paths, current_tar, tar_work_cwd, verbose=cfg.verbosetar)
+        dest_live = ensure_backup_destination_space(
+            tmp_runtime,
+            volumesize_kb=cfg.volumesize_kb,
+            lowdisk_multiplier=cfg.lowdiskspace_multiplier,
+        )
         state = persistence.load(tmp_runtime)
         state.source_size_running += du_sk_apparent(current_tar)
         member = f"{cfg.basename}.{chunk_index:06d}.tar"
         final_path = ship_raw_tar(
-            current_tar, dest, member, compress=cfg.compress, password=cfg.password, compressdir=compressdir
+            current_tar,
+            dest_live,
+            member,
+            compress=cfg.compress,
+            password=cfg.password,
+            compressdir=compressdir,
         )
         state.dest_size_running += du_sk_apparent(final_path)
         persistence.save(tmp_runtime, state)
@@ -304,7 +334,7 @@ def run_backup(cfg: BcsConfig) -> None:
         rel_path = member_rel_for_backup(cfg, source_root, path)
         if file_size > absolute:
             flush()
-            chunk_index = _tier3(rel_path, tar_work_cwd, cfg, tardir, compressdir, dest, tmp_runtime, tmp_prefix, chunk_index)
+            chunk_index = _tier3(rel_path, tar_work_cwd, cfg, tardir, compressdir, tmp_runtime, tmp_prefix, chunk_index)
             continue
 
         projected = _predict_after_add(pending_raw, file_size)
