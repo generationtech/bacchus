@@ -267,9 +267,6 @@ def run_backup(cfg: BcsConfig) -> None:
             wall_clock_start_timestamp=wall_clock_start,
         ),
     )
-    st0 = persistence.load(tmp_runtime)
-    statsmod.preseed_incremental_time_columns(st0, est_chunks)
-    persistence.save(tmp_runtime, st0)
 
     tar_work_cwd = backup_tar_chdir(cfg, source_root)
 

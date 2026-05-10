@@ -9,10 +9,9 @@ from pathlib import Path
 
 from bacchus import persistence
 
-# Fixed gutter between incremental stats columns (after pct field through timestamp).
+# Fixed gutter between incremental stats columns (after pct field through timestamp;
+# also between ``remain..`` and ``elapsed..``).
 STATS_INCREMENTAL_COL_GAP = "  "
-# Tighter gap only between ``remain..`` and ``elapsed..`` (one space).
-STATS_REMAIN_TO_ELAPSED_GAP = " "
 
 # ``Total size:`` / ``Chunks (rough):`` label column width for pre-run estimate lines.
 STATS_ESTIMATE_LABEL_WIDTH = 28
@@ -131,25 +130,15 @@ def _stats_pct_field(pct: int) -> str:
 
 
 def _fmt_compr_ratio_pct(comp_ratio: int) -> str:
-    """Compression ratio for ``compr..`` — natural width (no fixed field); values stay 0–100%."""
+    """Compression ratio percent text alone (no ``compr..`` prefix); natural width."""
     cr = max(0, min(100, comp_ratio))
     return f"{cr}%"
 
 
-def preseed_incremental_time_columns(state: "persistence.RuntimeState", est_chunks: int) -> None:
-    """
-    Widen the ``elapsed..`` column before the first full stats line so longer elapsed strings
-    later (e.g. ``2m:45s`` vs ``8s``) do not shift ``last..`` onward.
-
-    ``remain..`` / ``last..`` widths are not pre-seeded so columns stay only as wide as observed
-    content plus the normal gutters.
-    """
-    if est_chunks < 1:
-        return
-    ceiling_s = min(72 * 3600, max(120, est_chunks * 45))
-    rem_txt = duration_readable(ceiling_s)
-    el_full = "elapsed.." + rem_txt
-    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(el_full))
+def _fmt_stats_compr_segment(comp_ratio: int) -> str:
+    """Fixed-width ``compr..NN%`` / ``compr..100%`` so the compr→source gap stays two spaces."""
+    cr = max(0, min(100, comp_ratio))
+    return "compr.." + f"{cr:>3}%"
 
 
 def _fmt_stats_compr_digits(comp_ratio: int) -> str:
@@ -219,7 +208,14 @@ def incremental_stats_backup(
 
     el_txt = duration_readable(elapsed_time)
     elapsed_seg = "elapsed.." + el_txt
-    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
+    if not state.stats_line_elapsed_seeded:
+        seed_elapsed = "elapsed.." + duration_readable(remain_time)
+        state.stats_line_elapsed_seg_w = max(
+            state.stats_line_elapsed_seg_w,
+            len(seed_elapsed),
+            len(elapsed_seg),
+        )
+        state.stats_line_elapsed_seeded = True
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
@@ -235,10 +231,7 @@ def incremental_stats_backup(
 
     cr_legacy = _fmt_stats_compr_digits(comp_ratio)
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_legacy))
-    compr_pct = _fmt_compr_ratio_pct(comp_ratio)
-    compr_full = "compr.." + compr_pct
-    state.stats_line_compr_seg_w = max(state.stats_line_compr_seg_w, len(compr_full))
-    compr_w = max(state.stats_line_compr_seg_w, len(compr_full))
+    compr_seg = _fmt_stats_compr_segment(comp_ratio)
 
     if state.source_size_total > 0:
         src_cap = f"source..{_fmt_kb_scaled(state.source_size_total)}"
@@ -254,7 +247,7 @@ def incremental_stats_backup(
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
     date_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
-    elapsed_col_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
+    elapsed_col_w = state.stats_line_elapsed_seg_w
     src_w = state.stats_line_source_seg_w
     dst_w = state.stats_line_dest_seg_w
     prefix = (
@@ -266,12 +259,12 @@ def incremental_stats_backup(
             elapsed_seg.ljust(elapsed_col_w),
             last_full.ljust(last_w),
             avg_full.ljust(avg_w),
-            compr_full.ljust(compr_w),
+            compr_seg,
             src_seg.ljust(src_w),
             dst_seg.ljust(dst_w),
         ]
     )
-    body = remain_full.ljust(remain_w) + STATS_REMAIN_TO_ELAPSED_GAP + tail
+    body = remain_full.ljust(remain_w) + STATS_INCREMENTAL_COL_GAP + tail
     line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail
     print(line)
 
@@ -329,7 +322,14 @@ def incremental_stats_restore(
 
     el_txt = duration_readable(elapsed_time)
     elapsed_seg = "elapsed.." + el_txt
-    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
+    if not state.stats_line_elapsed_seeded:
+        seed_elapsed = "elapsed.." + duration_readable(remain_time)
+        state.stats_line_elapsed_seg_w = max(
+            state.stats_line_elapsed_seg_w,
+            len(seed_elapsed),
+            len(elapsed_seg),
+        )
+        state.stats_line_elapsed_seeded = True
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
@@ -345,10 +345,7 @@ def incremental_stats_restore(
 
     cr_legacy = _fmt_stats_compr_digits(comp_ratio)
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_legacy))
-    compr_pct = _fmt_compr_ratio_pct(comp_ratio)
-    compr_full = "compr.." + compr_pct
-    state.stats_line_compr_seg_w = max(state.stats_line_compr_seg_w, len(compr_full))
-    compr_w = max(state.stats_line_compr_seg_w, len(compr_full))
+    compr_seg = _fmt_stats_compr_segment(comp_ratio)
 
     if state.source_size_total > 0:
         src_cap = f"source..{_fmt_kb_scaled(state.source_size_total)}"
@@ -363,7 +360,7 @@ def incremental_stats_restore(
     state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
-    elapsed_col_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
+    elapsed_col_w = state.stats_line_elapsed_seg_w
     src_w = state.stats_line_source_seg_w
     dst_w = state.stats_line_dest_seg_w
     date_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
@@ -376,12 +373,12 @@ def incremental_stats_restore(
             elapsed_seg.ljust(elapsed_col_w),
             last_full.ljust(last_w),
             avg_full.ljust(avg_w),
-            compr_full.ljust(compr_w),
+            compr_seg,
             src_seg.ljust(src_w),
             dst_seg.ljust(dst_w),
         ]
     )
-    body = remain_full.ljust(remain_w) + STATS_REMAIN_TO_ELAPSED_GAP + tail
+    body = remain_full.ljust(remain_w) + STATS_INCREMENTAL_COL_GAP + tail
     line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail
     print(line)
 

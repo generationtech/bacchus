@@ -446,7 +446,14 @@ def test_fmt_compr_ratio_pct_natural_width() -> None:
     assert statsmod._fmt_compr_ratio_pct(100) == "100%"
 
 
-def test_preseed_incremental_time_columns_widens_elapsed_only(capsys, tmp_path: Path, monkeypatch) -> None:
+def test_fmt_stats_compr_segment_fixed_width() -> None:
+    assert statsmod._fmt_stats_compr_segment(0) == "compr..  0%"
+    assert statsmod._fmt_stats_compr_segment(8) == "compr..  8%"
+    assert len(statsmod._fmt_stats_compr_segment(3)) == len(statsmod._fmt_stats_compr_segment(100))
+
+
+def test_incremental_stats_elapsed_column_seeded_from_first_remain(capsys, tmp_path: Path, monkeypatch) -> None:
+    """First full line sets ``elapsed..`` width from that line's remain; no pre-run preseed."""
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
@@ -459,15 +466,20 @@ def test_preseed_incremental_time_columns_widens_elapsed_only(capsys, tmp_path: 
         source_size_running=863_000,
         dest_size_running=796_000,
     )
-    statsmod.preseed_incremental_time_columns(state, 22)
     monkeypatch.setattr(statsmod.time, "time", lambda: 8)
     statsmod.incremental_stats_backup("test", state, "test.000001.tar", 1)
     out = capsys.readouterr().out.rstrip()
+    gap = statsmod.STATS_INCREMENTAL_COL_GAP
     i_el = out.index("elapsed..")
     i_last = out.index("last..")
-    # Pre-seed widens elapsed column only; ``last..`` starts after padded ``elapsed..`` cell.
-    assert i_last - i_el >= 12, f"expected elapsed column padded before last.., got gap {i_last - i_el} in {out!r}"
-    assert statsmod.STATS_REMAIN_TO_ELAPSED_GAP == " "
+    assert out[i_el - 2 : i_el] == gap, "remain.. cell → elapsed.. uses two-space gutter"
+    # Elapsed column width matches first-line remain ceiling, not an oversized preseed.
+    assert i_last - i_el == len("elapsed..2m:48s") + len(gap), (
+        f"expected tight elapsed→last boundary in {out!r}, span {i_last - i_el}"
+    )
+    i_src = out.index("source..")
+    assert out[i_src - 2 : i_src] == gap
+    assert out[i_src - 3] != " ", "compr..→source.. must not have a third padding space"
 
 
 def test_backup_progress_pct() -> None:

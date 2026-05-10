@@ -35,6 +35,8 @@ class RuntimeState:
     stats_line_last_seg_w: int = 0
     stats_line_avg_seg_w: int = 0
     stats_line_compr_seg_w: int = 0
+    # First full incremental stats line locks ``elapsed..`` column width from that line's remain.
+    stats_line_elapsed_seeded: bool = False
     chunk_index: int = 0
     mv_group_open: bool = False
     # Chunked backup: wall clock at run start; incremental stats use ``start_timestamp`` after preorder walk.
