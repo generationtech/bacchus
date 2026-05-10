@@ -119,7 +119,7 @@ def _stats_pct_field(pct: int) -> str:
 
 
 def _fmt_stats_compr_digits(comp_ratio: int) -> str:
-    """Compression ratio digits (no %%); zero-pad 0–99, ``100`` when full."""
+    """Legacy digit width for ``comp_ratio_text_size_running`` / jq persistence (zero-padded)."""
     cr = max(0, min(100, comp_ratio))
     if cr == 100:
         return "100"
@@ -189,15 +189,22 @@ def incremental_stats_backup(
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
-    last_w = state.incremental_text_size_running + 8
+    last_full = "last.." + inc_txt
+    state.stats_line_last_seg_w = max(state.stats_line_last_seg_w, len(last_full))
+    last_w = max(state.stats_line_last_seg_w, len(last_full))
 
     avg_txt = duration_readable(avg_time)
     state.avg_text_size_running = max(state.avg_text_size_running, len(avg_txt))
-    avg_w = state.avg_text_size_running + 7
+    avg_full = "avg.." + avg_txt
+    state.stats_line_avg_seg_w = max(state.stats_line_avg_seg_w, len(avg_full))
+    avg_w = max(state.stats_line_avg_seg_w, len(avg_full))
 
-    cr_txt = _fmt_stats_compr_digits(comp_ratio)
-    state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_txt))
-    compr_w = state.comp_ratio_text_size_running + 10
+    cr_legacy = _fmt_stats_compr_digits(comp_ratio)
+    state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_legacy))
+    compr_pct = _fmt_stats_pct(comp_ratio)
+    compr_full = "compr.." + compr_pct
+    state.stats_line_compr_seg_w = max(state.stats_line_compr_seg_w, len(compr_full))
+    compr_w = max(state.stats_line_compr_seg_w, len(compr_full))
 
     if state.source_size_total > 0:
         src_cap = f"source..{_fmt_kb_scaled(state.source_size_total)}"
@@ -228,9 +235,9 @@ def incremental_stats_backup(
         [
             remain_full.ljust(remain_w),
             elapsed_seg.ljust(elapsed_col_w),
-            ("last.." + inc_txt).ljust(last_w),
-            ("avg.." + avg_txt).ljust(avg_w),
-            ("compr.." + cr_txt + "%").ljust(compr_w),
+            last_full.ljust(last_w),
+            avg_full.ljust(avg_w),
+            compr_full.ljust(compr_w),
             src_seg.ljust(src_w),
             dst_seg.ljust(dst_w),
         ]
@@ -296,15 +303,22 @@ def incremental_stats_restore(
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
-    last_w = state.incremental_text_size_running + 8
+    last_full = "last.." + inc_txt
+    state.stats_line_last_seg_w = max(state.stats_line_last_seg_w, len(last_full))
+    last_w = max(state.stats_line_last_seg_w, len(last_full))
 
     avg_txt = duration_readable(avg_time)
     state.avg_text_size_running = max(state.avg_text_size_running, len(avg_txt))
-    avg_w = state.avg_text_size_running + 7
+    avg_full = "avg.." + avg_txt
+    state.stats_line_avg_seg_w = max(state.stats_line_avg_seg_w, len(avg_full))
+    avg_w = max(state.stats_line_avg_seg_w, len(avg_full))
 
-    cr_txt = _fmt_stats_compr_digits(comp_ratio)
-    state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_txt))
-    compr_w = state.comp_ratio_text_size_running + 10
+    cr_legacy = _fmt_stats_compr_digits(comp_ratio)
+    state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_legacy))
+    compr_pct = _fmt_stats_pct(comp_ratio)
+    compr_full = "compr.." + compr_pct
+    state.stats_line_compr_seg_w = max(state.stats_line_compr_seg_w, len(compr_full))
+    compr_w = max(state.stats_line_compr_seg_w, len(compr_full))
 
     if state.source_size_total > 0:
         src_cap = f"source..{_fmt_kb_scaled(state.source_size_total)}"
@@ -335,9 +349,9 @@ def incremental_stats_restore(
         [
             remain_full.ljust(remain_w),
             elapsed_seg.ljust(elapsed_col_w),
-            ("last.." + inc_txt).ljust(last_w),
-            ("avg.." + avg_txt).ljust(avg_w),
-            ("compr.." + cr_txt + "%").ljust(compr_w),
+            last_full.ljust(last_w),
+            avg_full.ljust(avg_w),
+            compr_full.ljust(compr_w),
             src_seg.ljust(src_w),
             dst_seg.ljust(dst_w),
         ]

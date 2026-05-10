@@ -32,6 +32,9 @@ class RuntimeState:
     stats_volume_cap_chars_max: int = 0
     stats_line_remain_seg_w: int = 0
     stats_line_elapsed_seg_w: int = 0
+    stats_line_last_seg_w: int = 0
+    stats_line_avg_seg_w: int = 0
+    stats_line_compr_seg_w: int = 0
     chunk_index: int = 0
     mv_group_open: bool = False
     # Chunked backup: wall clock at run start; incremental stats use ``start_timestamp`` after preorder walk.
