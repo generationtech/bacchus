@@ -104,16 +104,18 @@ def _fmt_kb_scaled(kb: int) -> str:
 
 
 def _fmt_stats_pct(pct: int) -> str:
-    """Progress percent for stats lines: always two digits before % until 100."""
+    """Progress percent: no leading zeros; leading space when the value is a single digit."""
     pct = max(0, min(100, pct))
     if pct == 100:
         return "100%"
-    return f"{pct:02d}%"
+    if pct < 10:
+        return f" {pct}%"
+    return f"{pct}%"
 
 
 def _stats_pct_field(pct: int) -> str:
-    """Fixed-width token so ``09%`` and ``100%`` align with following columns."""
-    return f"{_fmt_stats_pct(pct):<4}"
+    """Percent token only; ``STATS_INCREMENTAL_COL_GAP`` separates pct from ``remain``."""
+    return _fmt_stats_pct(pct)
 
 
 def _fmt_stats_compr_digits(comp_ratio: int) -> str:
@@ -142,17 +144,19 @@ def incremental_stats_backup(
     archive_max_num = vc_w + 1
     if tier3_inner_mv_vol is not None:
         if tier3_mv_group is not None:
-            mv_suffix = f" [L{tier3_mv_group} MV {tier3_inner_mv_vol}]"
+            mv_decor = f"[L{tier3_mv_group} MV {tier3_inner_mv_vol}]"
         else:
-            mv_suffix = f" [MV {tier3_inner_mv_vol}]"
+            mv_decor = f"[MV {tier3_inner_mv_vol}]"
     else:
-        mv_suffix = ""
+        mv_decor = ""
+    mv_tail = STATS_INCREMENTAL_COL_GAP + mv_decor if mv_decor else ""
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
     short_line = state.source_size_running == 0
     if short_line:
         print(
-            f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {_stats_pct_field(pct)}{mv_suffix}"
+            f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} "
+            f"{_stats_pct_field(pct)}{mv_tail}"
         )
         return
     avg_time = elapsed_time // tar_volume if tar_volume > 0 else 0
@@ -231,7 +235,7 @@ def incremental_stats_backup(
             dst_seg.ljust(dst_w),
         ]
     )
-    line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_suffix
+    line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail
     print(line)
 
 
@@ -250,11 +254,12 @@ def incremental_stats_restore(
     archive_max_num = vol_den_w + 1
     if tier3_inner_mv_vol is not None:
         if tier3_mv_group is not None:
-            mv_suffix = f" [L{tier3_mv_group} MV {tier3_inner_mv_vol}]"
+            mv_decor = f"[L{tier3_mv_group} MV {tier3_inner_mv_vol}]"
         else:
-            mv_suffix = f" [MV {tier3_inner_mv_vol}]"
+            mv_decor = f"[MV {tier3_inner_mv_vol}]"
     else:
-        mv_suffix = ""
+        mv_decor = ""
+    mv_tail = STATS_INCREMENTAL_COL_GAP + mv_decor if mv_decor else ""
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
     pct = (tar_volume * 100) // archive_volumes if archive_volumes else 0
@@ -337,7 +342,7 @@ def incremental_stats_restore(
             dst_seg.ljust(dst_w),
         ]
     )
-    line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_suffix
+    line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail
     print(line)
 
 

@@ -61,7 +61,7 @@ def test_incremental_stats_backup_short_line_when_no_bytes_shipped(capsys, tmp_p
     statsmod.incremental_stats_backup("test", state, "test.000001.tar", 1)
     out = capsys.readouterr().out.strip()
     assert "remain.." not in out
-    assert "00%" in out
+    assert " 0%" in out
 
 
 def test_incremental_stats_restore_line_has_spaces(capsys, monkeypatch) -> None:
@@ -120,6 +120,7 @@ def test_incremental_stats_restore_tier3_suffix(capsys, monkeypatch) -> None:
     )
     out = capsys.readouterr().out
     assert "[L2 MV 4]" in out
+    assert re.search(r"\d{2}:\d{2}:\d{2}  \[L2 MV 4\]", out)
 
 
 def test_incremental_stats_restore_last_reflects_incremental_timestamp(capsys, monkeypatch) -> None:
@@ -296,7 +297,7 @@ def test_incremental_stats_backup_tier3_shows_inner_mv_volume(capsys, tmp_path: 
     out = capsys.readouterr().out
     assert "[L1 MV 3]" in out
     assert "test.000005.tar [L" not in out
-    assert re.search(r"\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2} \[L1 MV 3\]", out)
+    assert re.search(r"\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}  \[L1 MV 3\]", out)
 
 
 def test_completion_stats_chunked_skips_du_uses_dest_running_only(capsys, tmp_path: Path, monkeypatch) -> None:
