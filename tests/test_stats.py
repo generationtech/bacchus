@@ -439,7 +439,14 @@ def test_fmt_stats_pct_fixed_width() -> None:
     assert statsmod._fmt_stats_pct(100) == "100%"
 
 
-def test_preseed_incremental_time_columns_widens_remain_elapsed(capsys, tmp_path: Path, monkeypatch) -> None:
+def test_fmt_compr_ratio_pct_natural_width() -> None:
+    assert statsmod._fmt_compr_ratio_pct(0) == "0%"
+    assert statsmod._fmt_compr_ratio_pct(8) == "8%"
+    assert statsmod._fmt_compr_ratio_pct(42) == "42%"
+    assert statsmod._fmt_compr_ratio_pct(100) == "100%"
+
+
+def test_preseed_incremental_time_columns_widens_elapsed_only(capsys, tmp_path: Path, monkeypatch) -> None:
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
@@ -458,7 +465,9 @@ def test_preseed_incremental_time_columns_widens_remain_elapsed(capsys, tmp_path
     out = capsys.readouterr().out.rstrip()
     i_el = out.index("elapsed..")
     i_last = out.index("last..")
-    assert i_last - i_el >= 18, f"expected wide elapsed column before last.., got gap {i_last - i_el} in {out!r}"
+    # Pre-seed widens elapsed column only; ``last..`` starts after padded ``elapsed..`` cell.
+    assert i_last - i_el >= 12, f"expected elapsed column padded before last.., got gap {i_last - i_el} in {out!r}"
+    assert statsmod.STATS_REMAIN_TO_ELAPSED_GAP == " "
 
 
 def test_backup_progress_pct() -> None:

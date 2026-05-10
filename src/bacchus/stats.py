@@ -11,6 +11,8 @@ from bacchus import persistence
 
 # Fixed gutter between incremental stats columns (after pct field through timestamp).
 STATS_INCREMENTAL_COL_GAP = "  "
+# Tighter gap only between ``remain..`` and ``elapsed..`` (one space).
+STATS_REMAIN_TO_ELAPSED_GAP = " "
 
 # ``Total size:`` / ``Chunks (rough):`` label column width for pre-run estimate lines.
 STATS_ESTIMATE_LABEL_WIDTH = 28
@@ -128,24 +130,26 @@ def _stats_pct_field(pct: int) -> str:
     return _fmt_stats_pct(pct)
 
 
+def _fmt_compr_ratio_pct(comp_ratio: int) -> str:
+    """Compression ratio for ``compr..`` — natural width (no fixed field); values stay 0–100%."""
+    cr = max(0, min(100, comp_ratio))
+    return f"{cr}%"
+
+
 def preseed_incremental_time_columns(state: "persistence.RuntimeState", est_chunks: int) -> None:
     """
-    Widen ``remain..`` / ``elapsed..`` columns before the first full stats line so longer
-    elapsed/remain strings later (e.g. ``1m:13s`` vs ``8s``) do not shift ``last..`` onward.
+    Widen the ``elapsed..`` column before the first full stats line so longer elapsed strings
+    later (e.g. ``2m:45s`` vs ``8s``) do not shift ``last..`` onward.
+
+    ``remain..`` / ``last..`` widths are not pre-seeded so columns stay only as wide as observed
+    content plus the normal gutters.
     """
     if est_chunks < 1:
         return
-    # Bracket plausible wall time from chunk count (cap 72h); per-chunk floor avoids tiny widths.
     ceiling_s = min(72 * 3600, max(120, est_chunks * 45))
     rem_txt = duration_readable(ceiling_s)
-    rem_full = "remain.." + rem_txt
     el_full = "elapsed.." + rem_txt
-    last_full = "last.." + rem_txt
-    state.remain_text_size_running = max(state.remain_text_size_running, len(rem_txt))
-    state.incremental_text_size_running = max(state.incremental_text_size_running, len(rem_txt))
-    state.stats_line_remain_seg_w = max(state.stats_line_remain_seg_w, len(rem_full))
     state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(el_full))
-    state.stats_line_last_seg_w = max(state.stats_line_last_seg_w, len(last_full))
 
 
 def _fmt_stats_compr_digits(comp_ratio: int) -> str:
@@ -231,7 +235,7 @@ def incremental_stats_backup(
 
     cr_legacy = _fmt_stats_compr_digits(comp_ratio)
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_legacy))
-    compr_pct = _fmt_stats_pct(comp_ratio)
+    compr_pct = _fmt_compr_ratio_pct(comp_ratio)
     compr_full = "compr.." + compr_pct
     state.stats_line_compr_seg_w = max(state.stats_line_compr_seg_w, len(compr_full))
     compr_w = max(state.stats_line_compr_seg_w, len(compr_full))
@@ -250,20 +254,15 @@ def incremental_stats_backup(
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
     date_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
-    elapsed_col_w = max(
-        state.stats_line_elapsed_seg_w,
-        state.stats_line_remain_seg_w,
-        len(elapsed_seg),
-    )
+    elapsed_col_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
     src_w = state.stats_line_source_seg_w
     dst_w = state.stats_line_dest_seg_w
     prefix = (
         f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} "
         f"{_stats_pct_field(pct)}{STATS_INCREMENTAL_COL_GAP}"
     )
-    body = STATS_INCREMENTAL_COL_GAP.join(
+    tail = STATS_INCREMENTAL_COL_GAP.join(
         [
-            remain_full.ljust(remain_w),
             elapsed_seg.ljust(elapsed_col_w),
             last_full.ljust(last_w),
             avg_full.ljust(avg_w),
@@ -272,6 +271,7 @@ def incremental_stats_backup(
             dst_seg.ljust(dst_w),
         ]
     )
+    body = remain_full.ljust(remain_w) + STATS_REMAIN_TO_ELAPSED_GAP + tail
     line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail
     print(line)
 
@@ -345,7 +345,7 @@ def incremental_stats_restore(
 
     cr_legacy = _fmt_stats_compr_digits(comp_ratio)
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_legacy))
-    compr_pct = _fmt_stats_pct(comp_ratio)
+    compr_pct = _fmt_compr_ratio_pct(comp_ratio)
     compr_full = "compr.." + compr_pct
     state.stats_line_compr_seg_w = max(state.stats_line_compr_seg_w, len(compr_full))
     compr_w = max(state.stats_line_compr_seg_w, len(compr_full))
@@ -363,11 +363,7 @@ def incremental_stats_restore(
     state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_seg))
     state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_seg))
 
-    elapsed_col_w = max(
-        state.stats_line_elapsed_seg_w,
-        state.stats_line_remain_seg_w,
-        len(elapsed_seg),
-    )
+    elapsed_col_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
     src_w = state.stats_line_source_seg_w
     dst_w = state.stats_line_dest_seg_w
     date_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
@@ -375,9 +371,8 @@ def incremental_stats_restore(
         f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} "
         f"{_stats_pct_field(pct)}{STATS_INCREMENTAL_COL_GAP}"
     )
-    body = STATS_INCREMENTAL_COL_GAP.join(
+    tail = STATS_INCREMENTAL_COL_GAP.join(
         [
-            remain_full.ljust(remain_w),
             elapsed_seg.ljust(elapsed_col_w),
             last_full.ljust(last_w),
             avg_full.ljust(avg_w),
@@ -386,6 +381,7 @@ def incremental_stats_restore(
             dst_seg.ljust(dst_w),
         ]
     )
+    body = remain_full.ljust(remain_w) + STATS_REMAIN_TO_ELAPSED_GAP + tail
     line = prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail
     print(line)
 
