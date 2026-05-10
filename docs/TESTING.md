@@ -60,6 +60,7 @@ pytest tests/test_stats.py::test_fmt_kb_scaled
 | [`tests/test_extern_tar.py`](../tests/test_extern_tar.py) | Interaction with external `tar` |
 | [`tests/test_e2e_chunked.py`](../tests/test_e2e_chunked.py) | **Integration:** small chunked roundtrips via `python -m bacchus` (including a symlink case) |
 | [`tests/test_e2e_full.py`](../tests/test_e2e_full.py) | **Heavy E2E:** large random tree, Tier-3 multi-volume check, restore, tree hash verify, regular-file counts, optional `rsync` checksum dry-run |
+| [`tests/test_e2e_defaults_mirror.py`](../tests/test_e2e_defaults_mirror.py) | **CLI-defaults E2E:** `pigz` on, volume size 100000 KiB, estimates/statistics on; `-C off` / `-u off` only for automation (see [`E2ECliDefaultsMirrorConfig`](../tests/integration/_e2e_impl.py)); skips if `pigz` missing |
 | [`tests/integration/_e2e_impl.py`](../tests/integration/_e2e_impl.py) | Shared E2E implementation (`E2EConfig`, `run_e2e`, `verify_match`, rsync step) |
 | [`tests/integration/run_e2e.py`](../tests/integration/run_e2e.py) | CLI to run the full E2E outside pytest (useful for debugging) |
 

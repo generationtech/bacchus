@@ -122,6 +122,24 @@ def _allocate_file_sizes(
     return sizes
 
 
+def _simple_partition_sizes(rng: random.Random, total_bytes: int, n_files: int, lo: int = 4096) -> list[int]:
+    """Split ``total_bytes`` across ``n_files`` parts, each at least ``lo`` bytes."""
+    if n_files < 1:
+        raise ValueError("n_files must be >= 1")
+    if total_bytes < n_files * lo:
+        raise ValueError(f"total_bytes={total_bytes} too small for {n_files} files (min {lo} each)")
+    slack = total_bytes - n_files * lo
+    raw = [rng.random() for _ in range(n_files)]
+    ssum = sum(raw)
+    chunks = [int(slack * r / ssum) for r in raw]
+    chunks[-1] = slack - sum(chunks[:-1])
+    return [lo + c for c in chunks]
+
+
+# Matches ``bacchus.cli`` backup defaults for ``-v`` (KiB).
+CLI_DEFAULT_VOLUMESIZE_KB = 100_000
+
+
 def _random_tree(root: Path, rng: random.Random, sizes: list[int]) -> None:
     """Create files under ``root``; random nested subdirs; ~50%% binary vs text."""
     root.mkdir(parents=True, exist_ok=True)
@@ -352,6 +370,172 @@ class E2EConfig:
         if self.workdir is not None:
             return self.workdir.resolve()
         return Path(tempfile.gettempdir()) / f"bacchus-e2e-{os.getpid()}-{time.time_ns()}"
+
+
+@dataclass
+class E2ECliDefaultsMirrorConfig:
+    """
+    Backup/restore/verify using CLI flags aligned with interactive defaults.
+
+    Deviations required for automation (documented):
+
+    - ``-C off`` — skip "Press enter to begin".
+    - ``-u off`` — no password prompt (empty password).
+
+    Does **not** assert Tier-3 inner MV headers (default chunk sizing is too large for a
+    modest tree); use `E2EConfig` / `run_e2e` for that.
+    """
+
+    total_bytes: int = 32 * 1024 * 1024
+    n_files: int = 18
+    workdir: Path | None = None
+    basename: str = "defaults_mirror"
+    seed: int | None = None
+    keep_on_success: bool = False
+
+    def resolved_workdir(self) -> Path:
+        if self.workdir is not None:
+            return self.workdir.resolve()
+        return Path(tempfile.gettempdir()) / f"bacchus-defaults-{os.getpid()}-{time.time_ns()}"
+
+
+def run_e2e_cli_defaults_mirror(cfg: E2ECliDefaultsMirrorConfig) -> int:
+    """
+    Run ``bacchus backup`` / ``restore`` with defaults mirrored from `bacchus.cli`, then
+    ``verify_match``, regular-file counts, and optional rsync checksum dry-run.
+
+    Requires **pigz** on PATH when compression stays on (CLI default).
+    """
+    workdir = cfg.resolved_workdir()
+    src_root = workdir / "source"
+    dest_root = workdir / "dest"
+    restored_root = workdir / "restored"
+    tar_dir = workdir / "tar"
+    comp_dir = workdir / "comp"
+    dec_dir = workdir / "dec"
+    env = _repo_pythonpath()
+    exe = sys.executable
+
+    rng = random.Random(cfg.seed if cfg.seed is not None else time.time_ns() % (2**32))
+
+    try:
+        workdir.mkdir(parents=True, exist_ok=True)
+        tardir_path = tar_dir.resolve()
+        compdir_path = comp_dir.resolve()
+        decdir_path = dec_dir.resolve()
+        sizes = _simple_partition_sizes(rng, cfg.total_bytes, cfg.n_files)
+        _random_tree(src_root, rng, sizes)
+
+        # Explicitly mirror argparse defaults for backup (see bacchus.cli add_common).
+        backup_cmd = [
+            exe,
+            "-m",
+            "bacchus",
+            "backup",
+            "-s",
+            str(src_root.resolve()),
+            "-d",
+            str(dest_root.resolve()),
+            "-b",
+            cfg.basename,
+            "-v",
+            str(CLI_DEFAULT_VOLUMESIZE_KB),
+            "-z",
+            "on",
+            "-r",
+            "on",
+            "-t",
+            str(tardir_path),
+            "-c",
+            str(compdir_path),
+            "-E",
+            "on",
+            "-S",
+            "on",
+            "-W",
+            "on",
+            "-X",
+            "on",
+            "-T",
+            "off",
+            "-R",
+            "off",
+            "-C",
+            "off",
+            "-u",
+            "off",
+        ]
+
+        restore_cmd = [
+            exe,
+            "-m",
+            "bacchus",
+            "restore",
+            "-s",
+            str(dest_root.resolve()),
+            "-d",
+            str(restored_root.resolve()),
+            "-b",
+            cfg.basename,
+            "-v",
+            str(CLI_DEFAULT_VOLUMESIZE_KB),
+            "-z",
+            "on",
+            "-r",
+            "on",
+            "-e",
+            str(decdir_path),
+            "-c",
+            str(compdir_path),
+            "-E",
+            "on",
+            "-S",
+            "on",
+            "-W",
+            "on",
+            "-X",
+            "on",
+            "-T",
+            "off",
+            "-R",
+            "off",
+            "-C",
+            "off",
+            "-u",
+            "off",
+        ]
+
+        _run_cmd(backup_cmd, env)
+        _run_cmd(restore_cmd, env)
+
+        verify_src = restored_root / src_root.name
+        verify_match(src_root, verify_src)
+
+        n_reg_src = _count_regular_files(src_root)
+        n_reg_dst = _count_regular_files(verify_src)
+        if n_reg_src != n_reg_dst:
+            raise AssertionError(
+                f"regular file count mismatch (find -type f semantics): "
+                f"source={n_reg_src} restored={n_reg_dst}"
+            )
+
+        _verify_rsync_mirror_checksum(src_root, verify_src)
+
+        print(
+            f"CLI-defaults mirror E2E OK: {cfg.total_bytes} bytes, {cfg.n_files} files; "
+            f"basename={cfg.basename}; workdir was {workdir}"
+        )
+    except Exception as e:
+        print(f"CLI-defaults mirror E2E FAILED: {e}", file=sys.stderr)
+        print(f"Source tree:    {src_root}", file=sys.stderr)
+        print(f"Restored tree:  {restored_root / src_root.name}", file=sys.stderr)
+        print(f"Backup chunks:  {dest_root}", file=sys.stderr)
+        print(f"Workdir:        {workdir}", file=sys.stderr)
+        return 1
+    else:
+        if not cfg.keep_on_success:
+            shutil.rmtree(workdir, ignore_errors=True)
+        return 0
 
 
 def run_e2e(cfg: E2EConfig) -> int:
