@@ -12,6 +12,9 @@ from bacchus import persistence
 # Fixed gutter between incremental stats columns (after pct field through timestamp).
 STATS_INCREMENTAL_COL_GAP = "  "
 
+# ``Total size:`` / ``Chunks (rough):`` label column width for pre-run estimate lines.
+STATS_ESTIMATE_LABEL_WIDTH = 28
+
 
 def duration_readable(total_seconds: int) -> str:
     string_date = ""
@@ -113,18 +116,36 @@ def _fmt_kb_scaled(kb: int) -> str:
 
 
 def _fmt_stats_pct(pct: int) -> str:
-    """Progress percent: no leading zeros; leading space when the value is a single digit."""
+    """Progress / compression percent: fixed width so ``100%`` does not shift later columns."""
     pct = max(0, min(100, pct))
     if pct == 100:
         return "100%"
-    if pct < 10:
-        return f" {pct}%"
-    return f"{pct}%"
+    return f"{pct:>3}%"
 
 
 def _stats_pct_field(pct: int) -> str:
     """Percent token only; ``STATS_INCREMENTAL_COL_GAP`` separates pct from ``remain``."""
     return _fmt_stats_pct(pct)
+
+
+def preseed_incremental_time_columns(state: "persistence.RuntimeState", est_chunks: int) -> None:
+    """
+    Widen ``remain..`` / ``elapsed..`` columns before the first full stats line so longer
+    elapsed/remain strings later (e.g. ``1m:13s`` vs ``8s``) do not shift ``last..`` onward.
+    """
+    if est_chunks < 1:
+        return
+    # Bracket plausible wall time from chunk count (cap 72h); per-chunk floor avoids tiny widths.
+    ceiling_s = min(72 * 3600, max(120, est_chunks * 45))
+    rem_txt = duration_readable(ceiling_s)
+    rem_full = "remain.." + rem_txt
+    el_full = "elapsed.." + rem_txt
+    last_full = "last.." + rem_txt
+    state.remain_text_size_running = max(state.remain_text_size_running, len(rem_txt))
+    state.incremental_text_size_running = max(state.incremental_text_size_running, len(rem_txt))
+    state.stats_line_remain_seg_w = max(state.stats_line_remain_seg_w, len(rem_full))
+    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(el_full))
+    state.stats_line_last_seg_w = max(state.stats_line_last_seg_w, len(last_full))
 
 
 def _fmt_stats_compr_digits(comp_ratio: int) -> str:

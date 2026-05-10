@@ -51,7 +51,7 @@ def test_incremental_stats_backup_line_has_spaces(capsys, tmp_path: Path, monkey
 
 
 def test_incremental_stats_backup_gutters_single_digit_pct_and_tier3_tail(capsys, tmp_path: Path, monkeypatch) -> None:
-    """Matches live layout: `` 9%  remain..`` and ``…:42  [L1 MV 1]``."""
+    """Matches live layout: fixed-width ``  9%  remain..`` and ``…:42  [L1 MV 1]``."""
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
@@ -68,7 +68,7 @@ def test_incremental_stats_backup_gutters_single_digit_pct_and_tier3_tail(capsys
         "test", state, "test.000001.tar", 1, tier3_mv_group=1, tier3_inner_mv_vol=1
     )
     out = capsys.readouterr().out.strip()
-    assert re.search(r"/\d+\s+\d%  remain\.\.", out), f"expected single-digit pct + two spaces + remain.. in {out!r}"
+    assert re.search(r"/\d+\s+  5%  remain\.\.", out), f"expected fixed-width pct before remain.. in {out!r}"
     _assert_incremental_line_gutters(out, expect_mv=True)
 
 
@@ -107,7 +107,7 @@ def test_incremental_stats_backup_short_line_when_no_bytes_shipped(capsys, tmp_p
     statsmod.incremental_stats_backup("test", state, "test.000001.tar", 1)
     out = capsys.readouterr().out.strip()
     assert "remain.." not in out
-    assert " 0%" in out
+    assert "  0%" in out
 
 
 def test_incremental_stats_restore_line_has_spaces(capsys, monkeypatch) -> None:
@@ -430,6 +430,35 @@ def test_fmt_kb_signed_scaled() -> None:
     assert statsmod._fmt_kb_signed_scaled(0) == "0K"
     assert statsmod._fmt_kb_signed_scaled(1000) == "1M"
     assert statsmod._fmt_kb_signed_scaled(-1000) == "-1M"
+
+
+def test_fmt_stats_pct_fixed_width() -> None:
+    assert statsmod._fmt_stats_pct(0) == "  0%"
+    assert statsmod._fmt_stats_pct(5) == "  5%"
+    assert statsmod._fmt_stats_pct(42) == " 42%"
+    assert statsmod._fmt_stats_pct(100) == "100%"
+
+
+def test_preseed_incremental_time_columns_widens_remain_elapsed(capsys, tmp_path: Path, monkeypatch) -> None:
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        bcs_dest=str(dest),
+        archive_volumes=22,
+        source_size_total=17_000_000,
+        start_timestamp=0,
+        incremental_timestamp=0,
+        incremental_timestamp_running=0,
+        source_size_running=863_000,
+        dest_size_running=796_000,
+    )
+    statsmod.preseed_incremental_time_columns(state, 22)
+    monkeypatch.setattr(statsmod.time, "time", lambda: 8)
+    statsmod.incremental_stats_backup("test", state, "test.000001.tar", 1)
+    out = capsys.readouterr().out.rstrip()
+    i_el = out.index("elapsed..")
+    i_last = out.index("last..")
+    assert i_last - i_el >= 18, f"expected wide elapsed column before last.., got gap {i_last - i_el} in {out!r}"
 
 
 def test_backup_progress_pct() -> None:

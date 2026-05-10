@@ -249,11 +249,11 @@ def run_backup(cfg: BcsConfig) -> None:
 
     est_chunks = max(1, (source_size_total * 1024 + desired - 1) // desired)
     if cfg.estimate:
+        lw = statsmod.STATS_ESTIMATE_LABEL_WIDTH
         print(f"Estimating total size of:  {source_root}\n")
-        print(f"Total size:                {statsmod._fmt_kb_scaled(source_size_total)}")
-        print(
-            f"Estimated chunk count (rough): {est_chunks} (nominal target {cfg.volumesize_kb:,}k)".replace(",", "")
-        )
+        print(f"{'Total size:':<{lw}}{statsmod._fmt_kb_scaled(source_size_total)}")
+        chunk_detail = f"{est_chunks} (~{statsmod._fmt_int(cfg.volumesize_kb)}k nominal)"
+        print(f"{'Chunks (rough):':<{lw}}{chunk_detail}")
         print()
     ordered_paths = iter_source_paths_tar_order(source_root)
     stats_start = int(time.time())
@@ -267,6 +267,9 @@ def run_backup(cfg: BcsConfig) -> None:
             wall_clock_start_timestamp=wall_clock_start,
         ),
     )
+    st0 = persistence.load(tmp_runtime)
+    statsmod.preseed_incremental_time_columns(st0, est_chunks)
+    persistence.save(tmp_runtime, st0)
 
     tar_work_cwd = backup_tar_chdir(cfg, source_root)
 
