@@ -1,89 +1,159 @@
-# BACCHUS
+# Bacchus
 
-Creates multi-volume backups, optionally compressing (**pigz**) and encrypting (**gpg**) **each volume or chunk separately**. Chunked mode (default) writes **self-contained tar chunks** plus optional **Tier-3 GNU tar multi-volume “mini” runs** for single members larger than an absolute cap. Legacy mode preserves the original **single `tar -cM` stream** layout for compatibility with older backups.
+**Multi-volume tar backup and restore** for large trees, with optional **per-chunk compression** (pigz) and **per-chunk encryption** (gpg). Bacchus is aimed at workflows where each volume or chunk is a manageable file for removable media, remote sync, or archival storage.
+
+- **Project:** Python package (`bacchus`), GPLv3+ (see [LICENSE](LICENSE)).
+- **Status:** Maintained by the original author; suitable for production-style backups when you validate restore paths that matter to you.
+- **Documentation:** this file for overview and usage; [docs/TESTING.md](docs/TESTING.md) for the test suite.
+
+## Features
+
+- **Chunked mode (default for new backups)**  
+  Self-contained archive chunks named `basename.NNNNNN.tar`, optionally suffixed with `.gz` and/or `.gpg`. Restore inspects tar bytes to distinguish standalone members from GNU multi-volume slices—**no separate manifest file**.
+
+- **Tier-3 large-file handling (chunked)**  
+  Files that would exceed a configured **absolute max chunk size** are packed with an inner **GNU `tar -cM`** (“mini” multi-volume) run so a single logical file can span inner volumes while outer chunks stay bounded.
+
+- **Legacy mode**  
+  Same on-disk naming as Bacchus 1.x: `basename.tar`, `basename.tar-2`, … from a **single** multi-volume `tar -cM` stream—for compatibility with older archives.
+
+- **Restore mode inference**  
+  If `--archive-mode` is omitted on restore, Bacchus infers **chunked** vs **legacy** from filenames in the source directory (pass the flag explicitly if both layouts exist).
+
+- **Operational controls**  
+  Volume/chunk size, intermediate directories, ramdisk (tmpfs) for heavy compress/encrypt paths, estimates, confirmations, and **statistics** hooks (per-chunk progress lines in the style of the original bash tooling).
+
+- **Path layout options (chunked backup)**  
+  `--archive-path-scope` (member paths relative to source’s parent vs source root) and `--archive-top-dir` for a stable top-level directory name inside the archive.
 
 ## Requirements
 
-- Python **3.9+**
-- **GNU tar**, **pigz** (optional if compression disabled), **gpg** (optional if encryption disabled)
-- For **legacy ramdisk** or **chunked ramdisk**: ability to `mount` **tmpfs** (typically root)
+| Component | Notes |
+|-----------|--------|
+| **Python** | 3.9 or newer |
+| **GNU tar** | Required for backup/restore |
+| **pigz** | Optional if compression is disabled (`-z off`) |
+| **gpg** | Optional if encryption is disabled (`-u off` and no password) |
+| **tmpfs / mount** | Used when ramdisk is enabled for compress/encrypt intermediates (typically needs appropriate privileges) |
 
-## Install (development)
+For **developers** running the full test suite, see [docs/TESTING.md](docs/TESTING.md) (including optional **rsync** for an extra E2E checksum check).
+
+## Install
+
+**From a clone (recommended for development):**
 
 ```bash
 pip install -e .
-# or without install:
-./bacchus --help
-# equivalent:
+```
+
+This installs the `bacchus` console script (see `pyproject.toml`).
+
+**Run without installing:**
+
+```bash
 PYTHONPATH=src python3 -m bacchus --help
 ```
 
-The `bacchus` console script is registered when installing the package (`pip install -e .`).
-
-## Usage
+Or use the wrapper script if present in your tree root:
 
 ```bash
-bacchus --help
+./bacchus --help
+```
+
+**Development dependencies** (pytest):
+
+```bash
+pip install -e '.[dev]'
+```
+
+## Quick start
+
+```bash
 bacchus backup --help
 bacchus restore --help
 ```
 
-### Archive modes
+Typical chunked backup (adjust paths and sizes for your environment):
 
-- **`chunked` (default for backup)**  
-  Chunks are named `basename.NNNNNN.tar` (optional `.gz`, `.gpg`). Restore detects standalone vs multi-volume slices by inspecting tar bytes (no manifest).
+```bash
+bacchus backup \
+  -s /path/to/data \
+  -d /path/to/archive/output \
+  -b mybackup \
+  -v 100000 \
+  --archive-mode chunked \
+  -t /path/to/tardir \
+  -c /path/to/compdir \
+  -z on \
+  -u off
+```
 
-- **`legacy`**  
-  Same on-disk layout as Bacchus 1.x: `basename.tar`, `basename.tar-2`, …
+Restore into an empty or dedicated destination:
 
-On **restore**, if `--archive-mode` is omitted, Bacchus infers the mode from filenames. If both layouts are present, pass `--archive-mode` explicitly.
+```bash
+bacchus restore \
+  -s /path/to/archive/output \
+  -d /path/to/restored \
+  -b mybackup \
+  -e /path/to/decrypttmp \
+  -z on \
+  -u off
+```
 
-### Notable new flags
+Use `-C off` for non-interactive runs (skips “Press enter to begin”). Tar verbose mode and password sources are documented under `bacchus backup --help`.
+
+## Archive modes
+
+| Mode | Backup output | Restore |
+|------|----------------|---------|
+| **chunked** (default for `backup` when omitted) | `basename.NNNNNN.tar` [`.gz`] [`.gpg`] | Auto-detected or `--archive-mode chunked` |
+| **legacy** | `basename.tar`, `basename.tar-2`, … | Auto-detected or `--archive-mode legacy` |
+
+### Chunked sizing flags
 
 | Flag | Meaning |
 |------|---------|
-| `--archive-mode chunked\|legacy` | Backup/restore driver |
-| `--absolute-max-size kB` | Chunked backup: max single chunk before Tier-3 mini `tar -cM` (default: `8 × --volumesize`) |
-| `--mini-slice-size kB` | Chunked backup: `-L` for inner `tar -cM` (default: `--volumesize`) |
-| `--start-chunk N` | Chunked restore: begin at chunk index `N` (1-based) |
+| `-v` / `--volumesize` | Target chunk size (KiB) |
+| `--absolute-max-size` | Max single outer chunk (KiB) before Tier-3 inner multi-volume (default: 8 × volumesize) |
+| `--mini-slice-size` | Inner `tar -cM` `-L` value (KiB); default: volumesize |
+| `--start-chunk` | Restore only from this 1-based chunk index onward |
 
-### Chunked progress (bash-style per “volume”)
+### Progress and statistics
 
-Chunked backup and restore print **one line per shipped chunk** (`basename.NNNNNN.tar`), similar to the legacy bash per-volume log:
+With **statistics** enabled (see `-S`, `-W`, `-X` in `--help`):
 
-- **`-S on` (default), `-W off`:** print the chunk filename only after each chunk.
-- **`-S on`, `-W on` (default):** print the full incremental statistics line (remain / elapsed / compression / sizes / timestamp), matching the legacy `volume_hook` layout.
-- **`-S off`:** suppress those per-chunk lines (and chunked completion summary that depends on `-X`; use **`-X off`** to silence the “OPERATION COMPLETE” block as well).
+- Chunked backup/restore can print **one line per shipped chunk**, including incremental fields (remain, elapsed, compression estimate, scaled sizes, timestamp) aligned for logging.
+- Tier-3 inner multi-volume slices follow the same hook behavior so logs stay consistent.
 
-Tier‑3 inner `tar -cM` slices are logged the same way (hook + final ship), so output stays consistent whether or not Tier‑3 ran.
+## Security and passwords
 
-### Legacy shell implementation
+- Prefer **no password on the command line** in shared histories; use interactive prompts or a protected file if you must automate (`-f`), understanding the risk of leaks.
+- Encryption applies **per chunk** when enabled; treat keys and passwords like any other secret material.
 
-The original bash + argbash sources live under [`legacy/`](legacy/) for reference or emergency use:
+## Legacy bash implementation
 
-- `legacy/bacchus.sh`
-- `legacy/scripts/`
-- `legacy/source/`
+The original bash and argbash sources remain under [`legacy/`](legacy/) for reference or emergency use (`legacy/bacchus.sh`, `legacy/scripts/`, etc.). Day-to-day use is the Python CLI above.
 
-## Tests
+## Testing
+
+See **[docs/TESTING.md](docs/TESTING.md)** for:
+
+- How to run **pytest** and target subsets
+- What each test module covers
+- The **heavy E2E** (~500 MiB) and the **`run_e2e`** CLI
+- Optional **rsync** checksum verification
+
+Short version:
 
 ```bash
 pip install -e '.[dev]'
-PYTHONPATH=src python3 -m pytest tests/ -q
+pytest
 ```
 
-### Full E2E (chunked + Tier‑3 + restore verify)
+## Contributing
 
-`tests/test_e2e_full.py` always runs a **~500 MiB** random tree through real `python -m bacchus` backup/restore when you run `pytest`. For a smaller manual run, use `--total-bytes` on the CLI (see below).
-
-Run the same flow from the CLI (writes under `$TMPDIR` by default):
-
-```bash
-PYTHONPATH=src python3 -m tests.integration.run_e2e --help
-```
-
-On failure, the implementation prints paths to the source tree, backup chunks, and restore output under the workdir and leaves them in place for inspection.
+Issues and pull requests are welcome. Please run the test suite before submitting changes and describe backup/restore scenarios you exercised. For test layout and commands, use [docs/TESTING.md](docs/TESTING.md).
 
 ## License
 
-GPL-3.0-or-later (see [LICENSE](LICENSE)).
+GPL-3.0-or-later. See [LICENSE](LICENSE).
