@@ -46,14 +46,25 @@ def main() -> None:
 
     compress = bool(st["compress"])
     password = str(st.get("password", ""))
-    src_dir = Path(st["bcs_source"])
+    search_roots = [Path(p) for p in st["search_roots"]]
+    datafile = Path(st["datafile"])
+
+    def record_prompt_idle(secs: int) -> None:
+        if secs <= 0:
+            return
+        rt = persistence.load(datafile)
+        rt.start_timestamp_running += secs
+        rt.incremental_timestamp_running += secs
+        persistence.save(datafile, rt)
+
     src_dir, _artifact = ensure_chunk_artifact(
         member,
-        initial_src=src_dir,
+        search_roots=search_roots,
         compress=compress,
         password=password,
+        record_prompt_idle=record_prompt_idle,
     )
-    st["bcs_source"] = str(src_dir.resolve())
+    st["search_roots"] = [str(p.resolve()) for p in search_roots]
 
     decryptdir = Path(st["decryptdir"])
     compressdir = Path(st["compressdir"])

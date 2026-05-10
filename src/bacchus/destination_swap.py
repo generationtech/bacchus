@@ -29,7 +29,7 @@ def ensure_backup_destination_space(
     # prompt does not drop accounting for an earlier path change.
     need_dest_accounting = False
     oldpath = str(bcs_dest)
-    stop_timestamp = 0
+    pause_total = 0
 
     while True:
         df = subprocess.run(
@@ -38,7 +38,7 @@ def ensure_backup_destination_space(
         lines = [ln for ln in df.stdout.splitlines() if ln.strip()]
         availablespace = int(lines[-1].split()[3])
         if availablespace < lowspace:
-            stop_timestamp = int(time.time())
+            t_wait = int(time.time())
             print(
                 f"\nLOW AVAILABLE SPACE on {bcs_dest} ({availablespace}k < {lowspace}k)\n"
                 "Either free-up space, or swap out the storage device,\n"
@@ -47,6 +47,7 @@ def ensure_backup_destination_space(
             )
             entered = input().strip()
             print()
+            pause_total += int(time.time()) - t_wait
             if entered:
                 need_dest_accounting = True
                 bcs_dest = Path(entered)
@@ -62,9 +63,10 @@ def ensure_backup_destination_space(
                 )
                 last = du.stdout.strip().splitlines()[-1].split()[0]
                 state.dest_size_running += int(last)
-                resume_ts = int(time.time())
-                state.start_timestamp_running += resume_ts - stop_timestamp
-                state.incremental_timestamp_running += resume_ts - stop_timestamp
+                persistence.save(datafile, state)
+            if pause_total:
+                state.start_timestamp_running += pause_total
+                state.incremental_timestamp_running += pause_total
                 persistence.save(datafile, state)
             break
 

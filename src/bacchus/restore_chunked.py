@@ -21,6 +21,20 @@ from bacchus import stats as statsmod
 from bacchus import volume_supply
 
 
+def _total_archive_kb_on_roots(roots: list[Path]) -> int:
+    total = 0
+    for r in roots:
+        try:
+            out = subprocess.check_output(
+                ["du", "-sk", "--apparent-size", str(r.resolve())],
+                text=True,
+            )
+            total += int(out.split()[0])
+        except (subprocess.CalledProcessError, OSError):
+            continue
+    return total
+
+
 def _list_chunks(source: Path, basename: str) -> list[Path]:
     rx = re.compile(rf"^{re.escape(basename)}\.(\d{{6}})\.tar(?:\.gz)?(?:\.gpg)?$")
     items: list[tuple[int, Path]] = []
@@ -43,18 +57,18 @@ def _run_inner_mv_extract(
     hook_script: Path,
     volno_path: Path,
     tmp_runtime: Path,
-    bcs_source: Path,
+    search_roots: list[Path],
     inner_mv_group: int,
     stats_tar_volume_after_vol1: int,
     compress: bool,
     password: str,
     decryptdir: Path,
     compressdir: Path,
-) -> tuple[int, Path]:
+) -> tuple[int, list[Path]]:
     """
     Run legacy-style inner ``tar -xM``: volume 1 is *vol1_plain*; hook decodes later chunks on demand.
 
-    Returns ``(hook_decode_count, updated_bcs_source)``.
+    Returns ``(hook_decode_count, updated_search_roots)``.
     """
     state = {
         "datafile": str(tmp_runtime.resolve()),
@@ -63,7 +77,7 @@ def _run_inner_mv_extract(
         "password": password,
         "decryptdir": str(decryptdir.resolve()),
         "compressdir": str(compressdir.resolve()),
-        "bcs_source": str(bcs_source.resolve()),
+        "search_roots": [str(p.resolve()) for p in search_roots],
         "first_chunk_seq": first_seq,
         "statistics": cfg.statistics,
         "runstatistics": cfg.runstatistics,
@@ -111,8 +125,10 @@ def _run_inner_mv_extract(
         st_out = json.loads(state_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         st_out = {}
-    new_src = Path(st_out.get("bcs_source", str(bcs_source)))
-    return hook_decode_count, new_src.resolve()
+    roots_out = st_out.get("search_roots")
+    if roots_out:
+        return hook_decode_count, [Path(p) for p in roots_out]
+    return hook_decode_count, list(search_roots)
 
 
 def run_restore(cfg: BcsConfig) -> None:
@@ -243,19 +259,41 @@ def run_restore(cfg: BcsConfig) -> None:
 
     inner_mv_group = 0
     processed_chunks = 0
-    idx = 0
-    bcs_source_mutable = bcs_source
+    seq_cursor = start
+    search_roots = [bcs_source.resolve()]
 
-    while idx < len(paths):
-        p = paths[idx]
-        member = restore_sizing.chunk_member_name(p, cfg.basename)
-        src_dir, _artifact = volume_supply.ensure_chunk_artifact(
-            member,
-            initial_src=bcs_source_mutable,
-            compress=compress,
-            password=password,
-        )
-        bcs_source_mutable = src_dir
+    def record_prompt_idle(secs: int) -> None:
+        if secs <= 0:
+            return
+        st = persistence.load(tmp_runtime)
+        st.start_timestamp_running += secs
+        st.incremental_timestamp_running += secs
+        persistence.save(tmp_runtime, st)
+
+    while True:
+        member = f"{cfg.basename}.{seq_cursor:06d}.tar"
+        mx = volume_supply.max_chunk_seq_across_roots(search_roots, cfg.basename)
+        if seq_cursor > mx:
+            missing = volume_supply.find_chunk_artifact(member, search_roots, compress, password) is None
+            if missing and not sys.stdin.isatty():
+                break
+
+        try:
+            src_dir, _artifact = volume_supply.ensure_chunk_artifact(
+                member,
+                search_roots=search_roots,
+                compress=compress,
+                password=password,
+                record_prompt_idle=record_prompt_idle,
+            )
+        except volume_supply.RestoreNoMoreChunks:
+            break
+
+        mx = max(mx, volume_supply.max_chunk_seq_across_roots(search_roots, cfg.basename))
+        st_pre = persistence.load(tmp_runtime)
+        st_pre.archive_volumes = max(st_pre.archive_volumes, mx, processed_chunks + 1)
+        st_pre.source_size_total = _total_archive_kb_on_roots(search_roots)
+        persistence.save(tmp_runtime, st_pre)
 
         decoded, src_sz, dst_sz = process_volume_restore(
             src_dir,
@@ -298,7 +336,7 @@ def run_restore(cfg: BcsConfig) -> None:
             st.incremental_timestamp = int(time.time())
             st.incremental_timestamp_running = 0
             persistence.save(tmp_runtime, st)
-            idx += 1
+            seq_cursor += 1
             continue
 
         if kind == TarSegmentKind.MV_START:
@@ -322,10 +360,10 @@ def run_restore(cfg: BcsConfig) -> None:
             persistence.save(tmp_runtime, st)
 
             first_seq = volume_supply.chunk_seq_from_member(member, cfg.basename)
-            state_path = Path(str(tmp_prefix) + f".inner_mv.{idx}.json")
-            hook_script = Path(str(tmp_prefix) + f".inner_mv_nvs.{idx}.sh")
-            volno_path = Path(str(tmp_prefix) + f".inner.volno.{idx}")
-            hook_decode_count, bcs_source_mutable = _run_inner_mv_extract(
+            state_path = Path(str(tmp_prefix) + f".inner_mv.{seq_cursor}.json")
+            hook_script = Path(str(tmp_prefix) + f".inner_mv_nvs.{seq_cursor}.sh")
+            volno_path = Path(str(tmp_prefix) + f".inner.volno.{seq_cursor}")
+            hook_decode_count, search_roots = _run_inner_mv_extract(
                 cfg=cfg,
                 vol1_plain=decoded,
                 first_seq=first_seq,
@@ -333,7 +371,7 @@ def run_restore(cfg: BcsConfig) -> None:
                 hook_script=hook_script,
                 volno_path=volno_path,
                 tmp_runtime=tmp_runtime,
-                bcs_source=bcs_source_mutable,
+                search_roots=search_roots,
                 inner_mv_group=inner_mv_group,
                 stats_tar_volume_after_vol1=processed_chunks,
                 compress=compress,
@@ -342,7 +380,7 @@ def run_restore(cfg: BcsConfig) -> None:
                 compressdir=compressdir,
             )
             processed_chunks += hook_decode_count
-            idx += 1 + hook_decode_count
+            seq_cursor = first_seq + 1 + hook_decode_count
             continue
 
         decoded.unlink(missing_ok=True)
@@ -353,4 +391,4 @@ def run_restore(cfg: BcsConfig) -> None:
 
     if cfg.statistics and cfg.endstatistics:
         st = persistence.load(tmp_runtime)
-        statsmod.completion_stats_restore(st, len(paths), cfg.dest.resolve())
+        statsmod.completion_stats_restore(st, processed_chunks, cfg.dest.resolve())
