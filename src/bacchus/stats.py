@@ -133,8 +133,10 @@ def incremental_stats_backup(
     archive_volumes = state.archive_volumes
     pct = _backup_progress_pct(state)
     volume_cap = _chunked_volume_total_display(state, tar_volume)
-    archive_max_name = len(basename) + len(str(volume_cap)) + 6
-    archive_max_num = len(str(volume_cap)) + 1
+    state.stats_volume_cap_chars_max = max(state.stats_volume_cap_chars_max, len(str(volume_cap)))
+    vc_w = state.stats_volume_cap_chars_max
+    archive_max_name = len(basename) + vc_w + 6
+    archive_max_num = vc_w + 1
     if tier3_inner_mv_vol is not None:
         if tier3_mv_group is not None:
             mv_suffix = f" [L{tier3_mv_group} MV {tier3_inner_mv_vol}]"
@@ -173,7 +175,8 @@ def incremental_stats_backup(
     remain_w = state.remain_text_size_running + 10
 
     el_txt = duration_readable(elapsed_time)
-    elapsed_w = remain_w + 1
+    elapsed_seg = "elapsed.." + el_txt
+    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
@@ -187,6 +190,12 @@ def incremental_stats_backup(
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_txt))
     compr_w = state.comp_ratio_text_size_running + 10
 
+    if state.source_size_total > 0:
+        src_cap = f"source..{_fmt_kb_scaled(state.source_size_total)}"
+        dst_cap = f"dest..{_fmt_kb_scaled(state.source_size_total)}"
+        state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_cap))
+        state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_cap))
+
     src_fmt = _fmt_kb_scaled(state.source_size_running)
     dst_fmt = _fmt_kb_scaled(dest_size)
     src_seg = f"source..{src_fmt}"
@@ -198,7 +207,7 @@ def incremental_stats_backup(
     line = (
         f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} {_stats_pct_field(pct)}  "
         f"{'remain..' + rem_txt:<{remain_w}s}"
-        f"{'elapsed..' + el_txt:<{elapsed_w}s}"
+        f"{elapsed_seg:<{state.stats_line_elapsed_seg_w}s}"
         f"{'last..' + inc_txt:<{last_w}s}"
         f"{'avg..' + avg_txt:<{avg_w}s}"
         f"{'compr..' + cr_txt + '%':<{compr_w}s}"
@@ -219,8 +228,9 @@ def incremental_stats_restore(
     tier3_inner_mv_vol: int | None = None,
 ) -> None:
     archive_volumes = state.archive_volumes
-    archive_max_name = len(basename) + len(str(archive_volumes)) + 6
-    archive_max_num = len(str(archive_volumes)) + 1
+    vol_den_w = max(len(str(archive_volumes)), len(str(tar_volume)))
+    archive_max_name = len(basename) + vol_den_w + 6
+    archive_max_num = vol_den_w + 1
     if tier3_inner_mv_vol is not None:
         if tier3_mv_group is not None:
             mv_suffix = f" [L{tier3_mv_group} MV {tier3_inner_mv_vol}]"
@@ -257,7 +267,8 @@ def incremental_stats_restore(
     remain_w = state.remain_text_size_running + 10
 
     el_txt = duration_readable(elapsed_time)
-    elapsed_w = remain_w + 1
+    elapsed_seg = "elapsed.." + el_txt
+    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
@@ -271,6 +282,12 @@ def incremental_stats_restore(
     state.comp_ratio_text_size_running = max(state.comp_ratio_text_size_running, len(cr_txt))
     compr_w = state.comp_ratio_text_size_running + 10
 
+    if state.source_size_total > 0:
+        src_cap = f"source..{_fmt_kb_scaled(state.source_size_total)}"
+        dst_cap = f"dest..{_fmt_kb_scaled(state.source_size_total)}"
+        state.stats_line_source_seg_w = max(state.stats_line_source_seg_w, len(src_cap))
+        state.stats_line_dest_seg_w = max(state.stats_line_dest_seg_w, len(dst_cap))
+
     src_fmt = _fmt_kb_scaled(state.source_size_running)
     dst_fmt = _fmt_kb_scaled(state.dest_size_running)
     src_seg = f"source..{src_fmt}"
@@ -281,7 +298,7 @@ def incremental_stats_restore(
     line = (
         f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} {_stats_pct_field(pct)}  "
         f"{'remain..' + rem_txt:<{remain_w}s}"
-        f"{'elapsed..' + el_txt:<{elapsed_w}s}"
+        f"{elapsed_seg:<{state.stats_line_elapsed_seg_w}s}"
         f"{'last..' + inc_txt:<{last_w}s}"
         f"{'avg..' + avg_txt:<{avg_w}s}"
         f"{'compr..' + cr_txt + '%':<{compr_w}s}"
