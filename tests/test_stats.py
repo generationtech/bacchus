@@ -143,8 +143,7 @@ def test_incremental_stats_restore_volume_one_shows_remain(capsys, monkeypatch) 
     )
     statsmod.incremental_stats_restore("test", state, "test.000001.tar", 1)
     out = capsys.readouterr().out
-    # Denominator uses byte extrapolation (≈20 chunks) rather than archive_volumes alone.
-    assert "remain..31m:40s" in out
+    assert "remain..15m" in out
 
 
 def test_incremental_stats_restore_tier3_suffix(capsys, monkeypatch) -> None:
@@ -458,8 +457,8 @@ def test_fmt_stats_compr_segment_fixed_width() -> None:
     assert len(statsmod._fmt_stats_compr_segment(8)) == len(statsmod._fmt_stats_compr_segment(42))
 
 
-def test_incremental_stats_elapsed_column_seeded_from_first_remain(capsys, tmp_path: Path, monkeypatch) -> None:
-    """First full line sets ``elapsed..`` width from that line's remain; no pre-run preseed."""
+def test_incremental_stats_elapsed_column_monotonic_width(capsys, tmp_path: Path, monkeypatch) -> None:
+    """``elapsed..`` column width grows with the longest ``elapsed..`` segment seen (never shrinks)."""
     dest = tmp_path / "dest"
     dest.mkdir()
     state = persistence.RuntimeState(
@@ -479,9 +478,8 @@ def test_incremental_stats_elapsed_column_seeded_from_first_remain(capsys, tmp_p
     i_el = out.index("elapsed..")
     i_last = out.index("last..")
     assert out[i_el - 2 : i_el] == gap, "remain.. cell → elapsed.. uses two-space gutter"
-    # Elapsed column width matches first-line remain ceiling, not an oversized preseed.
-    assert i_last - i_el == len("elapsed..2m:48s") + len(gap), (
-        f"expected tight elapsed→last boundary in {out!r}, span {i_last - i_el}"
+    assert i_last - i_el == len("elapsed..8s") + len(gap), (
+        f"expected elapsed→last boundary from first elapsed segment in {out!r}, span {i_last - i_el}"
     )
     i_src = out.index("source..")
     assert out[i_src - 2 : i_src] == gap

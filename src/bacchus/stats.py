@@ -174,7 +174,7 @@ def _emit_incremental_stats_full_line(
     Single layout path for backup and restore full incremental rows.
 
     Requires :attr:`~bacchus.persistence.RuntimeState.stats_line_*` widths to already
-    reflect this row's segments (running maxima updated before calling).
+    reflect this row's segments (monotonic running maxima updated before calling).
     """
     tail = STATS_INCREMENTAL_COL_GAP.join(
         [
@@ -252,14 +252,7 @@ def incremental_stats_backup(
 
     el_txt = duration_readable(elapsed_time)
     elapsed_seg = "elapsed.." + el_txt
-    if not state.stats_line_elapsed_seeded:
-        seed_elapsed = "elapsed.." + duration_readable(remain_time)
-        state.stats_line_elapsed_seg_w = max(
-            state.stats_line_elapsed_seg_w,
-            len(seed_elapsed),
-            len(elapsed_seg),
-        )
-        state.stats_line_elapsed_seeded = True
+    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
@@ -318,8 +311,9 @@ def incremental_stats_restore(
     tier3_inner_mv_vol: int | None = None,
 ) -> None:
     """Restore incremental row; full lines use :func:`_emit_incremental_stats_full_line` like backup."""
-    volume_cap = max(_chunked_volume_total_display(state, tar_volume), state.archive_volumes)
-    state.stats_volume_cap_chars_max = max(state.stats_volume_cap_chars_max, len(str(volume_cap)))
+    # Chunk total comes only from scanned archive dirs (updated when roots change), not byte estimates.
+    vol_total = max(state.archive_volumes, tar_volume)
+    state.stats_volume_cap_chars_max = max(state.stats_volume_cap_chars_max, len(str(vol_total)))
     vc_w = state.stats_volume_cap_chars_max
     archive_max_name = len(basename) + vc_w + 6
     archive_max_num = vc_w + 1
@@ -333,22 +327,10 @@ def incremental_stats_restore(
     mv_tail = STATS_INCREMENTAL_COL_GAP + mv_decor if mv_decor else ""
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
-    pct = (tar_volume * 100) // volume_cap if volume_cap else 0
+    pct = (tar_volume * 100) // vol_total if vol_total else 0
 
     avg_time = elapsed_time // tar_volume if tar_volume > 0 else 0
-    remain_time = avg_time * max(0, volume_cap - tar_volume)
-    if (
-        remain_time == 0
-        and pct < 100
-        and tar_volume > 0
-        and avg_time > 0
-        and state.source_size_total > 0
-        and state.source_size_running < state.source_size_total
-    ):
-        bpc = max(1, state.source_size_running // tar_volume)
-        bytes_rem = state.source_size_total - state.source_size_running
-        est_chunks = (bytes_rem + bpc - 1) // bpc
-        remain_time = avg_time * est_chunks
+    remain_time = avg_time * max(0, vol_total - tar_volume)
 
     incremental_time = timestamp - state.incremental_timestamp - state.incremental_timestamp_running
     comp_ratio = (
@@ -362,14 +344,7 @@ def incremental_stats_restore(
 
     el_txt = duration_readable(elapsed_time)
     elapsed_seg = "elapsed.." + el_txt
-    if not state.stats_line_elapsed_seeded:
-        seed_elapsed = "elapsed.." + duration_readable(remain_time)
-        state.stats_line_elapsed_seg_w = max(
-            state.stats_line_elapsed_seg_w,
-            len(seed_elapsed),
-            len(elapsed_seg),
-        )
-        state.stats_line_elapsed_seeded = True
+    state.stats_line_elapsed_seg_w = max(state.stats_line_elapsed_seg_w, len(elapsed_seg))
 
     inc_txt = duration_readable(incremental_time)
     state.incremental_text_size_running = max(state.incremental_text_size_running, len(inc_txt))
@@ -400,7 +375,7 @@ def incremental_stats_restore(
 
     date_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
     prefix = (
-        f"{filename:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} "
+        f"{filename:<{archive_max_name}s} {f'/{vol_total}':>{archive_max_num}s} "
         f"{_stats_pct_field(pct)}{STATS_INCREMENTAL_COL_GAP}"
     )
     _emit_incremental_stats_full_line(

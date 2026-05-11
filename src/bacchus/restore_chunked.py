@@ -308,6 +308,7 @@ def run_restore(cfg: BcsConfig) -> None:
 
         mx = max(mx, volume_supply.max_chunk_seq_across_roots(search_roots, cfg.basename))
         st_pre = persistence.load(tmp_runtime)
+        # Outer chunk total: max index seen across all search roots (grows when new dirs are added).
         st_pre.archive_volumes = max(st_pre.archive_volumes, mx, processed_chunks + 1)
         st_pre.source_size_total = volume_supply.total_archive_kb_on_roots(search_roots)
         persistence.save(tmp_runtime, st_pre)
