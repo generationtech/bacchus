@@ -23,6 +23,18 @@ class Ramdisk:
         )
         self._mounted = True
 
+    def remount_resize(self, size_bytes: int) -> None:
+        """Grow tmpfs in place (Linux ``mount -o remount,size=…``). No-op if already large enough."""
+        if not self._mounted:
+            raise RuntimeError("Ramdisk.remount_resize requires an active mount")
+        if size_bytes <= self.size_bytes:
+            return
+        subprocess.run(
+            ["mount", "-o", f"remount,size={size_bytes}", str(self.mountpoint)],
+            check=True,
+        )
+        self.size_bytes = size_bytes
+
     def umount(self) -> None:
         if not self._mounted:
             return

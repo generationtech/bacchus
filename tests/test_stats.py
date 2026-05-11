@@ -143,7 +143,8 @@ def test_incremental_stats_restore_volume_one_shows_remain(capsys, monkeypatch) 
     )
     statsmod.incremental_stats_restore("test", state, "test.000001.tar", 1)
     out = capsys.readouterr().out
-    assert "remain..15m" in out
+    # Denominator uses byte extrapolation (≈20 chunks) rather than archive_volumes alone.
+    assert "remain..31m:40s" in out
 
 
 def test_incremental_stats_restore_tier3_suffix(capsys, monkeypatch) -> None:

@@ -16,7 +16,7 @@ from pathlib import Path
 
 from bacchus import persistence, stats as statsmod
 from bacchus.pipeline import process_volume_restore
-from bacchus.volume_supply import ensure_chunk_artifact
+from bacchus.volume_supply import ensure_chunk_artifact, max_chunk_seq_across_roots, total_archive_kb_on_roots
 
 
 def main() -> None:
@@ -66,6 +66,9 @@ def main() -> None:
     )
     st["search_roots"] = [str(p.resolve()) for p in search_roots]
 
+    mx_chunks = max_chunk_seq_across_roots(search_roots, basename)
+    archive_trees_kb = total_archive_kb_on_roots(search_roots)
+
     decryptdir = Path(st["decryptdir"])
     compressdir = Path(st["compressdir"])
     decoded, src_sz, dst_sz = process_volume_restore(
@@ -88,6 +91,8 @@ def main() -> None:
 
     stats_tar_after_v1 = int(st["stats_tar_volume_after_vol1"])
     tar_vol_index = stats_tar_after_v1 + (vol - 1)
+    rt.archive_volumes = max(rt.archive_volumes, mx_chunks, tar_vol_index)
+    rt.source_size_total = archive_trees_kb
 
     if st.get("statistics") and st.get("runstatistics"):
         statsmod.incremental_stats_restore(

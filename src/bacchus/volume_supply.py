@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -57,6 +58,21 @@ def max_chunk_seq_on_disk(root: Path, basename: str) -> int:
 
 def max_chunk_seq_across_roots(roots: list[Path], basename: str) -> int:
     return max((max_chunk_seq_on_disk(r, basename) for r in roots), default=0)
+
+
+def total_archive_kb_on_roots(roots: list[Path]) -> int:
+    """Sum of ``du -sk --apparent-size`` for each restore search root (chunk storage trees)."""
+    total = 0
+    for r in roots:
+        try:
+            out = subprocess.check_output(
+                ["du", "-sk", "--apparent-size", str(r.resolve())],
+                text=True,
+            )
+            total += int(out.split()[0])
+        except (subprocess.CalledProcessError, OSError):
+            continue
+    return total
 
 
 def prompt_new_source(expected: Path, current_roots: list[Path]) -> Path | None:

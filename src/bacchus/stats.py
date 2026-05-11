@@ -17,7 +17,8 @@ STATS_INCREMENTAL_COL_GAP = "  "
 STATS_ESTIMATE_LABEL_WIDTH = 28
 
 
-def duration_readable(total_seconds: int) -> str:
+def duration_readable(total_seconds: int | float) -> str:
+    total_seconds = int(total_seconds)
     string_date = ""
     days = total_seconds // 3600 // 24
     if days > 0:
@@ -317,10 +318,11 @@ def incremental_stats_restore(
     tier3_inner_mv_vol: int | None = None,
 ) -> None:
     """Restore incremental row; full lines use :func:`_emit_incremental_stats_full_line` like backup."""
-    archive_volumes = state.archive_volumes
-    vol_den_w = max(len(str(archive_volumes)), len(str(tar_volume)))
-    archive_max_name = len(basename) + vol_den_w + 6
-    archive_max_num = vol_den_w + 1
+    volume_cap = max(_chunked_volume_total_display(state, tar_volume), state.archive_volumes)
+    state.stats_volume_cap_chars_max = max(state.stats_volume_cap_chars_max, len(str(volume_cap)))
+    vc_w = state.stats_volume_cap_chars_max
+    archive_max_name = len(basename) + vc_w + 6
+    archive_max_num = vc_w + 1
     if tier3_inner_mv_vol is not None:
         if tier3_mv_group is not None:
             mv_decor = f"[L{tier3_mv_group} MV {tier3_inner_mv_vol}]"
@@ -331,10 +333,10 @@ def incremental_stats_restore(
     mv_tail = STATS_INCREMENTAL_COL_GAP + mv_decor if mv_decor else ""
     timestamp = int(time.time())
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
-    pct = (tar_volume * 100) // archive_volumes if archive_volumes else 0
+    pct = (tar_volume * 100) // volume_cap if volume_cap else 0
 
     avg_time = elapsed_time // tar_volume if tar_volume > 0 else 0
-    remain_time = avg_time * max(0, archive_volumes - tar_volume)
+    remain_time = avg_time * max(0, volume_cap - tar_volume)
     if (
         remain_time == 0
         and pct < 100
@@ -398,7 +400,7 @@ def incremental_stats_restore(
 
     date_s = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
     prefix = (
-        f"{filename:<{archive_max_name}s} {f'/{archive_volumes}':>{archive_max_num}s} "
+        f"{filename:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} "
         f"{_stats_pct_field(pct)}{STATS_INCREMENTAL_COL_GAP}"
     )
     _emit_incremental_stats_full_line(
@@ -461,13 +463,14 @@ def completion_stats_restore(state: "persistence.RuntimeState", archive_volumes:
     dest_size = int(du.stdout.split()[0])
     # Running sum of decoded segment sizes vs final restored tree (legacy field).
     tar_overhead = state.dest_size_running - dest_size
-    comp_ratio = 100 - ((state.source_size_total * 100) // dest_size) if dest_size else 0
+    archive_kb = state.source_size_running
+    comp_ratio = 100 - ((archive_kb * 100) // dest_size) if dest_size else 0
     print("\nRESTORE OPERATION COMPLETE")
     print(f"Total runtime:                 {duration_readable(completion_time)}")
     print(f"Average time per archive file: {duration_readable(avg_time)}")
     print(f"Number of archive files:       {archive_volumes}")
     print(f"Tar overhead:                  {_fmt_kb_signed_scaled(tar_overhead)}")
-    print(f"Total size of source:          {_fmt_kb_scaled(state.source_size_total)}")
+    print(f"Total size of source:          {_fmt_kb_scaled(archive_kb)}")
     print(f"Total size of restore:         {_fmt_kb_scaled(dest_size)}")
     print(f"Overall compression ratio:     {comp_ratio}%")
 

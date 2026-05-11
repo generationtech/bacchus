@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from bacchus import extern
@@ -15,6 +17,47 @@ def chunk_member_name(path: Path, basename: str) -> str:
     if not m:
         raise ValueError(f"Not a chunked archive file: {path.name}")
     return m.group(1)
+
+
+def largest_chunk_artifact_across_roots(
+    roots: list[Path],
+    basename: str,
+    *,
+    compress: bool,
+    password: str,
+) -> tuple[Path, str]:
+    """
+    Largest on-disk chunk artifact (by ``st_size``) among all directories in ``roots``.
+
+    Used for quick probes (e.g. ramdisk smoke decode). **Tmpfs sizing** must use
+    :func:`worst_restore_intermediate_peak_kb_across_roots`, because a *smaller* ciphertext can
+    decrypt to a *larger* tar than a bigger file on disk (compression ratio varies).
+    """
+    rx = re.compile(rf"^{re.escape(basename)}\.(\d{{6}})\.tar(?:\.gz)?(?:\.gpg)?$")
+    best_art: Path | None = None
+    best_member: str | None = None
+    best_sz = -1
+    for root in roots:
+        root_r = root.resolve()
+        try:
+            for p in root_r.iterdir():
+                if not p.is_file():
+                    continue
+                m = rx.match(p.name)
+                if not m:
+                    continue
+                member = f"{basename}.{m.group(1)}.tar"
+                artifact = _artifact_path(root_r, member, compress, password)
+                if not artifact.is_file():
+                    continue
+                sz = artifact.stat().st_size
+                if sz > best_sz or (sz == best_sz and str(artifact) < str(best_art or "")):
+                    best_art, best_member, best_sz = artifact, member, sz
+        except OSError:
+            continue
+    if best_art is None or best_member is None:
+        raise FileNotFoundError(f"No {basename}.NNNNNN.tar* chunks under {roots!r}")
+    return best_art, best_member
 
 
 def largest_chunk_artifact(
@@ -109,8 +152,79 @@ def restore_intermediate_peak_kb(
     raise ValueError("restore_intermediate_peak_kb expects compress or password")
 
 
+def worst_restore_intermediate_peak_kb_across_roots(
+    roots: list[Path],
+    basename: str,
+    *,
+    compress: bool,
+    password: str,
+    scratch_parent: Path,
+) -> int:
+    """
+    Conservative tmpfs peak among **every** chunk artifact under ``roots``.
+
+    Per chunk, :func:`restore_intermediate_peak_kb` matches **one** decode pass (``.gz`` +
+    growing ``.tar`` during pigz). During **inner** ``tar -M`` restore, vol1's plain ``.tar`` can
+    remain on the same tmpfs while the **next** slice decrypts/decompresses, so peak can reach
+    ``pk + max_uncompressed_slice`` across chunks. We return ``worst_pk + worst_slack`` where
+    ``worst_slack`` is the largest gzip-uncompressed slice (or largest decrypted plain when not
+    compressed).
+    """
+    if not compress and not password:
+        raise ValueError("worst_restore_intermediate_peak_kb_across_roots needs compress or password")
+
+    rx = re.compile(rf"^{re.escape(basename)}\.(\d{{6}})\.tar(?:\.gz)?(?:\.gpg)?$")
+    scratch_parent.mkdir(parents=True, exist_ok=True)
+    worst_pk = 0
+    worst_slack = 0
+    n = 0
+    for root in roots:
+        root_r = root.resolve()
+        try:
+            for p in root_r.iterdir():
+                if not p.is_file():
+                    continue
+                m = rx.match(p.name)
+                if not m:
+                    continue
+                member = f"{basename}.{m.group(1)}.tar"
+                artifact = _artifact_path(root_r, member, compress, password)
+                if not artifact.is_file():
+                    continue
+                sub = Path(tempfile.mkdtemp(prefix="bacchus-wpeak-", dir=str(scratch_parent)))
+                try:
+                    if compress and password:
+                        gz_path = sub / f"{member}.gz"
+                        extern.gpg_decrypt(password, artifact, gz_path)
+                        gz_kb = du_sk_apparent(gz_path)
+                        uncomp_kb = _bytes_to_kb_ceil(gzip_uncompressed_bytes(gz_path))
+                        gz_path.unlink(missing_ok=True)
+                        worst_pk = max(worst_pk, gz_kb + uncomp_kb)
+                        worst_slack = max(worst_slack, uncomp_kb)
+                    elif compress and not password:
+                        gz_kb = du_sk_apparent(artifact)
+                        uncomp_kb = _bytes_to_kb_ceil(gzip_uncompressed_bytes(artifact))
+                        worst_pk = max(worst_pk, gz_kb + uncomp_kb)
+                        worst_slack = max(worst_slack, uncomp_kb)
+                    else:
+                        plain = sub / member
+                        extern.gpg_decrypt(password, artifact, plain)
+                        pk = du_sk_apparent(plain)
+                        plain.unlink(missing_ok=True)
+                        worst_pk = max(worst_pk, pk)
+                        worst_slack = max(worst_slack, pk)
+                    n += 1
+                finally:
+                    shutil.rmtree(sub, ignore_errors=True)
+        except OSError:
+            continue
+    if n == 0:
+        raise FileNotFoundError(f"No {basename}.NNNNNN.tar* chunks under {roots!r}")
+    return worst_pk + worst_slack
+
+
 def restore_ramdisk_size_bytes(peak_kb: int) -> int:
-    """tmpfs ``size=`` bytes: peak intermediates plus 1% slack (minimum ~1 MiB peak)."""
+    """tmpfs ``size=`` bytes: peak intermediates plus small slack (minimum ~1 MiB peak)."""
     peak_kb = max(peak_kb, 1024)
     base = peak_kb * 1024
-    return base + base // 100
+    return base + base // 20

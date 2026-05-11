@@ -21,20 +21,6 @@ from bacchus import stats as statsmod
 from bacchus import volume_supply
 
 
-def _total_archive_kb_on_roots(roots: list[Path]) -> int:
-    total = 0
-    for r in roots:
-        try:
-            out = subprocess.check_output(
-                ["du", "-sk", "--apparent-size", str(r.resolve())],
-                text=True,
-            )
-            total += int(out.split()[0])
-        except (subprocess.CalledProcessError, OSError):
-            continue
-    return total
-
-
 def _list_chunks(source: Path, basename: str) -> list[Path]:
     rx = re.compile(rf"^{re.escape(basename)}\.(\d{{6}})\.tar(?:\.gz)?(?:\.gpg)?$")
     items: list[tuple[int, Path]] = []
@@ -169,8 +155,11 @@ def run_restore(cfg: BcsConfig) -> None:
     tmpfs_size_bytes: int | None = None
 
     if compress or password:
-        largest_art, probe_member = restore_sizing.largest_chunk_artifact(
-            paths, cfg.basename, bcs_source, compress=compress, password=password
+        largest_art, probe_member = restore_sizing.largest_chunk_artifact_across_roots(
+            [bcs_source.resolve()],
+            cfg.basename,
+            compress=compress,
+            password=password,
         )
 
         if cfg.ramdisk:
@@ -205,12 +194,12 @@ def run_restore(cfg: BcsConfig) -> None:
 
         scratch_peak = Path(tempfile.mkdtemp(prefix="bacchus-peak-", dir="/tmp"))
         try:
-            peak_intermediate_kb = restore_sizing.restore_intermediate_peak_kb(
-                largest_art,
-                probe_member,
-                scratch_peak,
+            peak_intermediate_kb = restore_sizing.worst_restore_intermediate_peak_kb_across_roots(
+                [bcs_source.resolve()],
+                cfg.basename,
                 compress=compress,
                 password=password,
+                scratch_parent=scratch_peak,
             )
         finally:
             subprocess.run(["rm", "-rf", str(scratch_peak)], check=False)
@@ -261,6 +250,29 @@ def run_restore(cfg: BcsConfig) -> None:
     processed_chunks = 0
     seq_cursor = start
     search_roots = [bcs_source.resolve()]
+    roots_seen_sig: tuple[str, ...] = tuple(sorted(str(r.resolve()) for r in search_roots))
+
+    def expand_ramdisk_for_union_of_roots() -> None:
+        """tmpfs is sized from ``-s`` only at startup; grow when new media paths appear."""
+        if rd is None or not cfg.ramdisk:
+            return
+        scratch_peak = Path(tempfile.mkdtemp(prefix="bacchus-peak-", dir=str(tmp_prefix.parent)))
+        try:
+            peak_kb = restore_sizing.worst_restore_intermediate_peak_kb_across_roots(
+                search_roots,
+                cfg.basename,
+                compress=compress,
+                password=password,
+                scratch_parent=scratch_peak,
+            )
+        except FileNotFoundError:
+            return
+        finally:
+            subprocess.run(["rm", "-rf", str(scratch_peak)], check=False)
+        need_bytes = restore_sizing.restore_ramdisk_size_bytes(peak_kb)
+        if need_bytes > rd.size_bytes:
+            ramdisk.sync_filesystem()
+            rd.remount_resize(need_bytes)
 
     def record_prompt_idle(secs: int) -> None:
         if secs <= 0:
@@ -289,10 +301,15 @@ def run_restore(cfg: BcsConfig) -> None:
         except volume_supply.RestoreNoMoreChunks:
             break
 
+        sig = tuple(sorted(str(r.resolve()) for r in search_roots))
+        if sig != roots_seen_sig:
+            roots_seen_sig = sig
+            expand_ramdisk_for_union_of_roots()
+
         mx = max(mx, volume_supply.max_chunk_seq_across_roots(search_roots, cfg.basename))
         st_pre = persistence.load(tmp_runtime)
         st_pre.archive_volumes = max(st_pre.archive_volumes, mx, processed_chunks + 1)
-        st_pre.source_size_total = _total_archive_kb_on_roots(search_roots)
+        st_pre.source_size_total = volume_supply.total_archive_kb_on_roots(search_roots)
         persistence.save(tmp_runtime, st_pre)
 
         decoded, src_sz, dst_sz = process_volume_restore(

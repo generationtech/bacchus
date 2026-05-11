@@ -1,22 +1,25 @@
 """Restore tmpfs peak sizing."""
 
 import gzip
+import os
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from bacchus import restore_sizing
 
 
 def test_restore_ramdisk_size_bytes_slack_and_minimum() -> None:
-    """1% slack over peak KiB; floor at 1024 KiB."""
+    """5% slack over peak KiB; floor at 1024 KiB."""
     kb = 1024
     base = kb * 1024
-    assert restore_sizing.restore_ramdisk_size_bytes(kb) == base + base // 100
+    assert restore_sizing.restore_ramdisk_size_bytes(kb) == base + base // 20
 
     small = 100
     floor_kb = 1024
     floor_base = floor_kb * 1024
-    assert restore_sizing.restore_ramdisk_size_bytes(small) == floor_base + floor_base // 100
+    assert restore_sizing.restore_ramdisk_size_bytes(small) == floor_base + floor_base // 20
 
 
 def test_gzip_uncompressed_bytes_roundtrip(tmp_path: Path) -> None:
@@ -72,3 +75,60 @@ def test_largest_chunk_artifact_tie_lexicographic(tmp_path: Path) -> None:
     art, member = restore_sizing.largest_chunk_artifact(paths, basename, src, compress=True, password="")
     assert member == f"{basename}.000001.tar"
     assert art == src / f"{basename}.000001.tar.gz"
+
+
+def test_largest_chunk_artifact_across_roots_picks_max(tmp_path: Path) -> None:
+    basename = "demo"
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+    (a / f"{basename}.000001.tar.gz").write_bytes(gzip.compress(b"small"))
+    (b / f"{basename}.000099.tar.gz").write_bytes(gzip.compress(b"x" * 9000))
+    art, member = restore_sizing.largest_chunk_artifact_across_roots(
+        [a, b], basename, compress=True, password=""
+    )
+    assert member == f"{basename}.000099.tar"
+    assert art == b / f"{basename}.000099.tar.gz"
+
+
+def test_worst_peak_is_max_per_chunk_not_max_ciphertext(tmp_path: Path) -> None:
+    """Tiny ``.gz`` + huge logical tar beats larger on-disk chunk with smaller uncompressed."""
+    basename = "demo"
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+    (a / f"{basename}.000001.tar.gz").write_bytes(gzip.compress(b"\x00" * (500 * 1024), compresslevel=9))
+    (b / f"{basename}.000002.tar.gz").write_bytes(gzip.compress(os.urandom(100 * 1024), compresslevel=9))
+
+    def one_peak(artifact: Path, member: str) -> int:
+        sub = Path(tempfile.mkdtemp(dir=str(tmp_path)))
+        try:
+            return restore_sizing.restore_intermediate_peak_kb(
+                artifact, member, sub, compress=True, password=""
+            )
+        finally:
+            shutil.rmtree(sub, ignore_errors=True)
+
+    p1 = one_peak(a / f"{basename}.000001.tar.gz", f"{basename}.000001.tar")
+    p2 = one_peak(b / f"{basename}.000002.tar.gz", f"{basename}.000002.tar")
+
+    big_on_disk, _ = restore_sizing.largest_chunk_artifact_across_roots(
+        [a, b], basename, compress=True, password=""
+    )
+    assert big_on_disk.parent == b
+
+    parent = Path(tempfile.mkdtemp(dir=str(tmp_path)))
+    try:
+        worst = restore_sizing.worst_restore_intermediate_peak_kb_across_roots(
+            [a, b], basename, compress=True, password="", scratch_parent=parent
+        )
+    finally:
+        shutil.rmtree(parent, ignore_errors=True)
+
+    uncomp1_kb = (500 * 1024 + 1023) // 1024
+    uncomp2_kb = (100 * 1024 + 1023) // 1024
+    slack = max(uncomp1_kb, uncomp2_kb)
+    assert worst == max(p1, p2) + slack
+    assert p1 > p2

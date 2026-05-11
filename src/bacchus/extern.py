@@ -126,8 +126,18 @@ def pigz_compress(src: Path, dst_gz: Path) -> None:
 
 def pigz_decompress(src_gz: Path, dst: Path) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
-    with open(src_gz, "rb") as inf, open(dst, "wb") as outf:
-        run_check(["pigz", "-9cd"], stdin=inf, stdout=outf)
+    try:
+        with open(src_gz, "rb") as inf, open(dst, "wb") as outf:
+            run_check(["pigz", "-9cd"], stdin=inf, stdout=outf)
+    except subprocess.CalledProcessError as e:
+        if e.returncode == 28:
+            raise RuntimeError(
+                "pigz decompress failed: no space left on device while writing the decoded archive. "
+                "With ``bacchus restore -r on``, decrypt/decompress use tmpfs (RAM), not your ``-d`` "
+                "restore tree — that path can still have terabytes free. Retry with ``-r off`` to put "
+                "intermediates on disk, or free RAM/swap so tmpfs can grow."
+            ) from e
+        raise
 
 
 def gpg_encrypt(password: str, src: Path, dst: Path) -> None:
