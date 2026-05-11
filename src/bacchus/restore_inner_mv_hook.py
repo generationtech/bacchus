@@ -104,7 +104,7 @@ def main() -> None:
             tier3_inner_mv_vol=vol,
         )
     elif st.get("statistics"):
-        print(member)
+        statsmod.stats_message(member)
 
     rt.incremental_timestamp = int(time.time())
     rt.incremental_timestamp_running = 0

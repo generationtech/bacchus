@@ -83,7 +83,7 @@ def backup_new_volume() -> None:
             tar_volume,
         )
     else:
-        print(tar_base)
+        statsmod.stats_message(tar_base)
 
     compress = os.environ.get("BCS_COMPRESS") == "on"
     password = os.environ.get("BCS_PASSWORD", "")
@@ -202,7 +202,7 @@ def restore_new_volume() -> None:
             tar_volume,
         )
     else:
-        print(filename)
+        statsmod.stats_message(filename)
 
     state.incremental_timestamp = int(time.time())
     from bacchus.pipeline import process_volume_restore

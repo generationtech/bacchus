@@ -109,6 +109,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             help="print completion statistics (default: on)",
         )
         sp.add_argument(
+            "--stats-log-file",
+            choices=["on", "off"],
+            default="on",
+            help="mirror incremental and completion statistics to a file (default: on; use with -S on)",
+        )
+        sp.add_argument(
+            "--stats-log-path",
+            default=None,
+            metavar="PATH",
+            help="statistics log file path (default: <dest>/bacchus-stats.log)",
+        )
+        sp.add_argument(
             "--absolute-max-size",
             type=int,
             default=None,
@@ -175,6 +187,11 @@ def _print_options(cfg: BcsConfig, ns: argparse.Namespace) -> None:
     print(f"Base name for archive:               {cfg.basename}")
     print(f"Estimate size and duration:          {'on' if cfg.estimate else 'off'}")
     print(f"Show detailed statistics:            {'on' if cfg.statistics else 'off'}")
+    if cfg.statistics:
+        print(f"Statistics log file:                 {'on' if cfg.stats_file_log else 'off'}")
+        if cfg.stats_file_log:
+            lp = cfg.stats_file_log_path if cfg.stats_file_log_path is not None else (cfg.dest / "bacchus-stats.log")
+            print(f"Statistics log path:                 {lp.resolve()}")
     if cfg.compress or cfg.password:
         print(f"Use ramdisk for intermediate dirs:   {'on' if cfg.ramdisk else 'off'}")
     else:
@@ -230,6 +247,8 @@ def _ns_to_cfg(ns: argparse.Namespace) -> BcsConfig:
         statistics=_bool_from_store(ns.statistics),
         runstatistics=_bool_from_store(ns.runstatistics),
         endstatistics=_bool_from_store(ns.endstatistics),
+        stats_file_log=_bool_from_store(ns.stats_log_file),
+        stats_file_log_path=Path(ns.stats_log_path).resolve() if ns.stats_log_path else None,
         password=pw,
         absolute_max_size_kb=ns.absolute_max_size,
         mini_slice_size_kb=ns.mini_slice_size,

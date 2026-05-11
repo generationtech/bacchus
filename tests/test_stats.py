@@ -537,3 +537,30 @@ def test_chunked_volume_total_display_ema_smoothing() -> None:
     expected = max(20, 100, blended)
     assert statsmod._chunked_volume_total_display(st, 20) == expected
     assert st.chunk_total_display_smooth == expected
+
+
+def test_stats_file_session_disabled_does_not_create_file(tmp_path: Path) -> None:
+    log = tmp_path / "stats.log"
+    with statsmod.stats_file_session(False, log):
+        pass
+    assert not log.exists()
+
+
+def test_stats_file_session_mirrors_incremental_line(capsys, tmp_path: Path, monkeypatch) -> None:
+    log = tmp_path / "stats.log"
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    state = persistence.RuntimeState(
+        bcs_dest=str(dest),
+        archive_volumes=10,
+        source_size_total=10_000_000,
+        start_timestamp=1_000,
+        incremental_timestamp=1_000,
+        source_size_running=2_879_170,
+        dest_size_running=2_833_328,
+    )
+    monkeypatch.setattr(statsmod.time, "time", lambda: 1_050)
+    with statsmod.stats_file_session(True, log):
+        statsmod.incremental_stats_backup("test", state, "test.000003.tar", 3)
+    console = capsys.readouterr().out
+    assert log.read_text(encoding="utf-8") == console

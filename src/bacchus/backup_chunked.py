@@ -104,7 +104,7 @@ def _emit_chunked_ship_progress(
         )
         persistence.save(datafile, state)
     else:
-        print(member)
+        statsmod.stats_message(member)
 
 
 def _tier3(
@@ -260,6 +260,13 @@ def run_backup(cfg: BcsConfig) -> None:
 
     atexit.register(cleanup)
 
+    stats_log_path = (
+        cfg.stats_file_log_path.resolve()
+        if cfg.stats_file_log_path is not None
+        else cfg.dest.resolve() / "bacchus-stats.log"
+    )
+    stats_file_on = cfg.stats_file_log and cfg.statistics
+
     source_root = cfg.source.resolve()
     source_size_total = int(
         subprocess.check_output(["du", "-sk", "--apparent-size", str(source_root)], text=True).split()[0]
@@ -294,66 +301,68 @@ def run_backup(cfg: BcsConfig) -> None:
     pending_paths: list[str] = []
     pending_raw = 0
 
-    def flush() -> None:
-        nonlocal chunk_index, pending_paths, pending_raw
-        if not pending_paths:
-            return
-        current_tar = tardir / f"_cur.{os.getpid()}.tar"
-        if current_tar.exists():
-            current_tar.unlink()
-        extern.tar_create_archive(pending_paths, current_tar, tar_work_cwd, verbose=cfg.verbosetar)
-        dest_live = ensure_backup_destination_space(
-            tmp_runtime,
-            volumesize_kb=cfg.volumesize_kb,
-            lowdisk_multiplier=cfg.lowdiskspace_multiplier,
-        )
-        state = persistence.load(tmp_runtime)
-        state.source_size_running += du_sk_apparent(current_tar)
-        member = f"{cfg.basename}.{chunk_index:06d}.tar"
-        final_path = ship_raw_tar(
-            current_tar,
-            dest_live,
-            member,
-            compress=cfg.compress,
-            password=cfg.password,
-            compressdir=compressdir,
-        )
-        state.dest_size_running += du_sk_apparent(final_path)
-        persistence.save(tmp_runtime, state)
-        _emit_chunked_ship_progress(cfg, tmp_runtime, member, chunk_index)
-        state = persistence.load(tmp_runtime)
-        state.incremental_timestamp = int(time.time())
-        state.incremental_timestamp_running = 0
-        persistence.save(tmp_runtime, state)
-        current_tar.unlink(missing_ok=True)
-        chunk_index += 1
-        pending_paths = []
-        pending_raw = 0
+    with statsmod.stats_file_session(stats_file_on, stats_log_path):
 
-    for path, file_size in iter_files_from_ordered_paths(ordered_paths):
-        rel_path = member_rel_for_backup(cfg, source_root, path)
-        if file_size > absolute:
-            flush()
-            chunk_index = _tier3(rel_path, tar_work_cwd, cfg, tardir, compressdir, tmp_runtime, tmp_prefix, chunk_index)
-            continue
+        def flush() -> None:
+            nonlocal chunk_index, pending_paths, pending_raw
+            if not pending_paths:
+                return
+            current_tar = tardir / f"_cur.{os.getpid()}.tar"
+            if current_tar.exists():
+                current_tar.unlink()
+            extern.tar_create_archive(pending_paths, current_tar, tar_work_cwd, verbose=cfg.verbosetar)
+            dest_live = ensure_backup_destination_space(
+                tmp_runtime,
+                volumesize_kb=cfg.volumesize_kb,
+                lowdisk_multiplier=cfg.lowdiskspace_multiplier,
+            )
+            state = persistence.load(tmp_runtime)
+            state.source_size_running += du_sk_apparent(current_tar)
+            member = f"{cfg.basename}.{chunk_index:06d}.tar"
+            final_path = ship_raw_tar(
+                current_tar,
+                dest_live,
+                member,
+                compress=cfg.compress,
+                password=cfg.password,
+                compressdir=compressdir,
+            )
+            state.dest_size_running += du_sk_apparent(final_path)
+            persistence.save(tmp_runtime, state)
+            _emit_chunked_ship_progress(cfg, tmp_runtime, member, chunk_index)
+            state = persistence.load(tmp_runtime)
+            state.incremental_timestamp = int(time.time())
+            state.incremental_timestamp_running = 0
+            persistence.save(tmp_runtime, state)
+            current_tar.unlink(missing_ok=True)
+            chunk_index += 1
+            pending_paths = []
+            pending_raw = 0
 
-        projected = _predict_after_add(pending_raw, file_size)
-        if projected > desired and pending_paths:
-            flush()
-            projected = _predict_after_add(0, file_size)
+        for path, file_size in iter_files_from_ordered_paths(ordered_paths):
+            rel_path = member_rel_for_backup(cfg, source_root, path)
+            if file_size > absolute:
+                flush()
+                chunk_index = _tier3(rel_path, tar_work_cwd, cfg, tardir, compressdir, tmp_runtime, tmp_prefix, chunk_index)
+                continue
 
-        if projected > desired:
-            # Defensive: normal files should fit desired unless metadata estimates drift unexpectedly.
-            # Keep forward progress by placing it alone in a chunk.
-            pending_paths = [rel_path]
+            projected = _predict_after_add(pending_raw, file_size)
+            if projected > desired and pending_paths:
+                flush()
+                projected = _predict_after_add(0, file_size)
+
+            if projected > desired:
+                # Defensive: normal files should fit desired unless metadata estimates drift unexpectedly.
+                # Keep forward progress by placing it alone in a chunk.
+                pending_paths = [rel_path]
+                pending_raw = projected
+                flush()
+                continue
+
+            pending_paths.append(rel_path)
             pending_raw = projected
-            flush()
-            continue
 
-        pending_paths.append(rel_path)
-        pending_raw = projected
-
-    flush()
-    if chunk_index > 1 and cfg.statistics and cfg.endstatistics:
-        st = persistence.load(tmp_runtime)
-        statsmod.completion_stats_backup(st, chunk_index)
+        flush()
+        if chunk_index > 1 and cfg.statistics and cfg.endstatistics:
+            st = persistence.load(tmp_runtime)
+            statsmod.completion_stats_backup(st, chunk_index)

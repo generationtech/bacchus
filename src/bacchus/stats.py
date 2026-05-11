@@ -3,11 +3,81 @@
 from __future__ import annotations
 
 import glob
+import os
+from contextlib import contextmanager
 import subprocess
 import time
 from pathlib import Path
+from typing import TextIO
 
 from bacchus import persistence
+
+# Optional session log (same lines as incremental/completion stats on the console).
+_stats_log_fp: TextIO | None = None
+
+
+def start_stats_file_session(enabled: bool, path: Path | None) -> None:
+    """
+    Begin a stats log file for this backup/restore run.
+
+    Truncates ``path`` when enabled. Sets ``BCS_STATS_LOG`` / ``BCS_STATS_LOG_PATH`` so
+    subprocess hooks append to the same file.
+    """
+    global _stats_log_fp
+    end_stats_file_session()
+    if not enabled or path is None:
+        return
+    path = path.resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("", encoding="utf-8")
+    os.environ["BCS_STATS_LOG"] = "on"
+    os.environ["BCS_STATS_LOG_PATH"] = str(path)
+    _stats_log_fp = open(path, "a", encoding="utf-8", buffering=1)
+
+
+def end_stats_file_session() -> None:
+    global _stats_log_fp
+    if _stats_log_fp is not None:
+        try:
+            _stats_log_fp.close()
+        finally:
+            _stats_log_fp = None
+    os.environ.pop("BCS_STATS_LOG", None)
+    os.environ.pop("BCS_STATS_LOG_PATH", None)
+
+
+@contextmanager
+def stats_file_session(enabled: bool, path: Path | None):
+    """Truncate/open stats log when ``enabled``; always close and clear env in ``finally``."""
+    start_stats_file_session(enabled, path)
+    try:
+        yield
+    finally:
+        end_stats_file_session()
+
+
+def _ensure_stats_file_sink() -> None:
+    global _stats_log_fp
+    if _stats_log_fp is not None:
+        return
+    if os.environ.get("BCS_STATS_LOG") != "on":
+        return
+    p = os.environ.get("BCS_STATS_LOG_PATH", "").strip()
+    if not p:
+        return
+    lp = Path(p)
+    lp.parent.mkdir(parents=True, exist_ok=True)
+    _stats_log_fp = open(lp, "a", encoding="utf-8", buffering=1)
+
+
+def stats_message(*args: object, sep: str = " ", end: str = "\n", flush: bool = True) -> None:
+    """Print to stdout and mirror to the stats log file when a session or env is active."""
+    _ensure_stats_file_sink()
+    line = sep.join(str(a) for a in args)
+    print(line, end=end, flush=flush)
+    if _stats_log_fp is not None:
+        _stats_log_fp.write(line + ("" if end is None else end))
+        _stats_log_fp.flush()
 
 # Fixed gutter between incremental stats columns (after pct field through timestamp;
 # also between ``remain..`` and ``elapsed..``).
@@ -191,7 +261,7 @@ def _emit_incremental_stats_full_line(
         + STATS_INCREMENTAL_COL_GAP
         + tail
     )
-    print(prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail)
+    stats_message(prefix + body + STATS_INCREMENTAL_COL_GAP + date_s + mv_tail)
 
 
 def incremental_stats_backup(
@@ -222,7 +292,7 @@ def incremental_stats_backup(
     elapsed_time = timestamp - state.start_timestamp - state.start_timestamp_running
     short_line = state.source_size_running == 0
     if short_line:
-        print(
+        stats_message(
             f"{tar_archive:<{archive_max_name}s} {f'/{volume_cap}':>{archive_max_num}s} "
             f"{_stats_pct_field(pct)}{mv_tail}"
         )
@@ -408,9 +478,9 @@ def completion_stats_backup(state: "persistence.RuntimeState", tar_volume: int) 
     _SUMMARY_W = 34
 
     def _summary_line(label: str, value: str) -> None:
-        print(f"{label:<{_SUMMARY_W}}{value}")
+        stats_message(f"{label:<{_SUMMARY_W}}{value}")
 
-    print("\nBACKUP OPERATION COMPLETE")
+    stats_message("\nBACKUP OPERATION COMPLETE")
     _summary_line("Destination:", str(bcs_dest))
     _summary_line("Total runtime:", duration_readable(completion_time))
     _summary_line("Average time per archive file:", duration_readable(avg_time))
@@ -440,14 +510,14 @@ def completion_stats_restore(state: "persistence.RuntimeState", archive_volumes:
     tar_overhead = state.dest_size_running - dest_size
     archive_kb = state.source_size_running
     comp_ratio = 100 - ((archive_kb * 100) // dest_size) if dest_size else 0
-    print("\nRESTORE OPERATION COMPLETE")
-    print(f"Total runtime:                 {duration_readable(completion_time)}")
-    print(f"Average time per archive file: {duration_readable(avg_time)}")
-    print(f"Number of archive files:       {archive_volumes}")
-    print(f"Tar overhead:                  {_fmt_kb_signed_scaled(tar_overhead)}")
-    print(f"Total size of source:          {_fmt_kb_scaled(archive_kb)}")
-    print(f"Total size of restore:         {_fmt_kb_scaled(dest_size)}")
-    print(f"Overall compression ratio:     {comp_ratio}%")
+    stats_message("\nRESTORE OPERATION COMPLETE")
+    stats_message(f"Total runtime:                 {duration_readable(completion_time)}")
+    stats_message(f"Average time per archive file: {duration_readable(avg_time)}")
+    stats_message(f"Number of archive files:       {archive_volumes}")
+    stats_message(f"Tar overhead:                  {_fmt_kb_signed_scaled(tar_overhead)}")
+    stats_message(f"Total size of source:          {_fmt_kb_scaled(archive_kb)}")
+    stats_message(f"Total size of restore:         {_fmt_kb_scaled(dest_size)}")
+    stats_message(f"Overall compression ratio:     {comp_ratio}%")
 
 
 def compute_end(

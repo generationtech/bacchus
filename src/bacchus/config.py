@@ -33,6 +33,8 @@ class BcsConfig:
     statistics: bool = True
     runstatistics: bool = True
     endstatistics: bool = True
+    stats_file_log: bool = True
+    stats_file_log_path: Optional[Path] = None
     password: str = ""
     absolute_max_size_kb: Optional[int] = None  # default 8 * volumesize at resolve time
     mini_slice_size_kb: Optional[int] = None  # default volumesize
