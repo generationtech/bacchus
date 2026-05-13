@@ -117,7 +117,7 @@ def _run_inner_mv_extract(
     return hook_decode_count, list(search_roots)
 
 
-def run_restore(cfg: BcsConfig) -> None:
+def run_restore(cfg: BcsConfig, *, stats_log_preamble: str = "") -> None:
     tmp_prefix = Path(tempfile.mktemp(prefix="baccus-", dir="/tmp"))
     tmp_runtime = Path(str(tmp_prefix) + ".runtime")
 
@@ -221,26 +221,28 @@ def run_restore(cfg: BcsConfig) -> None:
 
     atexit.register(cleanup)
 
-    stats_log_path = (
-        cfg.stats_file_log_path.resolve()
-        if cfg.stats_file_log_path is not None
-        else cfg.dest.resolve() / "bacchus-stats.log"
-    )
     stats_file_on = cfg.stats_file_log and cfg.statistics
-
-    if cfg.estimate:
-        statsmod.print_estimate_chunked_restore(
-            chunks_on_disk=archive_volumes,
-            chunks_this_run=len(paths),
-            start_chunk=start,
-            source_size_total_kb=source_size_total,
-            ramdisk_planned=bool(cfg.ramdisk and (compress or password)),
-            peak_intermediate_kb=peak_intermediate_kb,
-            tmpfs_size_bytes=tmpfs_size_bytes,
+    stats_log_path: Path | None = None
+    if stats_file_on:
+        stats_log_path = (
+            cfg.stats_file_log_path.resolve()
+            if cfg.stats_file_log_path is not None
+            else statsmod.create_default_stats_log_path()
         )
-    print()
 
-    with statsmod.stats_file_session(stats_file_on, stats_log_path):
+    with statsmod.stats_file_session(stats_file_on, stats_log_path, preamble=stats_log_preamble):
+        if cfg.estimate:
+            statsmod.print_estimate_chunked_restore(
+                chunks_on_disk=archive_volumes,
+                chunks_this_run=len(paths),
+                start_chunk=start,
+                source_size_total_kb=source_size_total,
+                ramdisk_planned=bool(cfg.ramdisk and (compress or password)),
+                peak_intermediate_kb=peak_intermediate_kb,
+                tmpfs_size_bytes=tmpfs_size_bytes,
+            )
+        statsmod.stats_message("")
+
         ts = int(time.time())
         persistence.save(
             tmp_runtime,

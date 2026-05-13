@@ -564,3 +564,21 @@ def test_stats_file_session_mirrors_incremental_line(capsys, tmp_path: Path, mon
         statsmod.incremental_stats_backup("test", state, "test.000003.tar", 3)
     console = capsys.readouterr().out
     assert log.read_text(encoding="utf-8") == console
+
+
+def test_stats_file_session_preamble_file_only(capsys, tmp_path: Path) -> None:
+    log = tmp_path / "stats.log"
+    with statsmod.stats_file_session(True, log, preamble="PREAMBLE\n"):
+        statsmod.stats_message("BODY")
+    assert capsys.readouterr().out.strip() == "BODY"
+    assert log.read_text(encoding="utf-8") == "PREAMBLE\nBODY\n"
+
+
+def test_create_default_stats_log_path_prefix_and_cleanup() -> None:
+    p = statsmod.create_default_stats_log_path()
+    try:
+        assert "bacchus-stats-" in p.name
+        assert p.suffix == ".log"
+        assert p.exists()
+    finally:
+        p.unlink(missing_ok=True)

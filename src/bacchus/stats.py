@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import glob
 import os
+import tempfile
 from contextlib import contextmanager
 import subprocess
 import time
@@ -16,12 +17,42 @@ from bacchus import persistence
 _stats_log_fp: TextIO | None = None
 
 
-def start_stats_file_session(enabled: bool, path: Path | None) -> None:
+def create_default_stats_log_path() -> Path:
+    """
+    Allocate an empty statistics log path, preferring tmpfs-style directories
+    (``/dev/shm``, then ``/run/user/$UID``) so the log does not pin the backup destination mount.
+    """
+    bases: list[Path] = []
+    uid = os.getuid()
+    for d in (Path("/dev/shm"), Path(f"/run/user/{uid}"), Path(tempfile.gettempdir())):
+        if d.is_dir() and os.access(d, os.W_OK):
+            bases.append(d)
+    last_err: OSError | None = None
+    for base in bases:
+        try:
+            fd, name = tempfile.mkstemp(prefix="bacchus-stats-", suffix=".log", dir=str(base))
+            os.close(fd)
+            return Path(name)
+        except OSError as e:
+            last_err = e
+            continue
+    try:
+        fd, name = tempfile.mkstemp(prefix="bacchus-stats-", suffix=".log")
+        os.close(fd)
+        return Path(name)
+    except OSError as e:
+        raise OSError(
+            "Could not create statistics log under /dev/shm, /run/user/$UID, or temp directories"
+        ) from (last_err or e)
+
+
+def start_stats_file_session(enabled: bool, path: Path | None, *, preamble: str = "") -> None:
     """
     Begin a stats log file for this backup/restore run.
 
     Truncates ``path`` when enabled. Sets ``BCS_STATS_LOG`` / ``BCS_STATS_LOG_PATH`` so
-    subprocess hooks append to the same file.
+    subprocess hooks append to the same file. Optional ``preamble`` is written to the file
+    only (already shown on the console), before any ``stats_message`` lines.
     """
     global _stats_log_fp
     end_stats_file_session()
@@ -33,6 +64,9 @@ def start_stats_file_session(enabled: bool, path: Path | None) -> None:
     os.environ["BCS_STATS_LOG"] = "on"
     os.environ["BCS_STATS_LOG_PATH"] = str(path)
     _stats_log_fp = open(path, "a", encoding="utf-8", buffering=1)
+    if preamble:
+        _stats_log_fp.write(preamble)
+        _stats_log_fp.flush()
 
 
 def end_stats_file_session() -> None:
@@ -47,9 +81,9 @@ def end_stats_file_session() -> None:
 
 
 @contextmanager
-def stats_file_session(enabled: bool, path: Path | None):
+def stats_file_session(enabled: bool, path: Path | None, *, preamble: str = ""):
     """Truncate/open stats log when ``enabled``; always close and clear env in ``finally``."""
-    start_stats_file_session(enabled, path)
+    start_stats_file_session(enabled, path, preamble=preamble)
     try:
         yield
     finally:
@@ -559,15 +593,16 @@ def print_estimate_chunked_restore(
     tmpfs_size_bytes: int | None,
 ) -> None:
     """Pre-run summary for manifestless chunked restore (no legacy volume-size math)."""
-    print(f"\nArchive chunks on disk:          {chunks_on_disk}")
-    print(f"Archive chunks (this run):       {chunks_this_run}")
+    stats_message("")
+    stats_message(f"Archive chunks on disk:          {chunks_on_disk}")
+    stats_message(f"Archive chunks (this run):       {chunks_this_run}")
     if start_chunk > 1:
-        print(f"Starting at chunk number:        {start_chunk}")
-    print(f"Total size of archive directory: {_fmt_kb_scaled(source_size_total_kb)}")
+        stats_message(f"Starting at chunk number:        {start_chunk}")
+    stats_message(f"Total size of archive directory: {_fmt_kb_scaled(source_size_total_kb)}")
     if ramdisk_planned and peak_intermediate_kb is not None and tmpfs_size_bytes is not None:
         tmpfs_kb = tmpfs_size_bytes // 1024
-        print(f"Peak intermediate (worst chunk): {_fmt_kb_scaled(peak_intermediate_kb)}")
-        print(f"Planned tmpfs size:              {_fmt_kb_scaled(tmpfs_kb)}")
+        stats_message(f"Peak intermediate (worst chunk): {_fmt_kb_scaled(peak_intermediate_kb)}")
+        stats_message(f"Planned tmpfs size:              {_fmt_kb_scaled(tmpfs_kb)}")
 
 
 def print_estimate(
@@ -576,10 +611,11 @@ def print_estimate(
     source_size_total: int,
     bcs_volumesize_end: int,
 ) -> None:
-    print(f"\nVolume size for archive:     {_fmt_int(volumesize_kb)}k")
-    print(f"Estimated number of volumes: {archive_volumes}")
-    print(f"Estimated size of source:    {_fmt_int(source_size_total)}k")
+    stats_message("")
+    stats_message(f"Volume size for archive:     {_fmt_int(volumesize_kb)}k")
+    stats_message(f"Estimated number of volumes: {archive_volumes}")
+    stats_message(f"Estimated size of source:    {_fmt_int(source_size_total)}k")
     total_dest_size = (archive_volumes - 1) * volumesize_kb + bcs_volumesize_end
-    print(f"Estimated size of restore:   {_fmt_int(total_dest_size)}k")
+    stats_message(f"Estimated size of restore:   {_fmt_int(total_dest_size)}k")
     comp_ratio = 100 - ((source_size_total * 100) // total_dest_size) if total_dest_size else 0
-    print(f"Estimated compression ratio: {comp_ratio}%")
+    stats_message(f"Estimated compression ratio: {comp_ratio}%")

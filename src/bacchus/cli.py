@@ -8,6 +8,7 @@ from pathlib import Path
 
 from bacchus import backup_chunked, restore_chunked
 from bacchus import stats as statsmod
+from bacchus import operation_preamble
 from bacchus.config import BcsConfig
 
 
@@ -118,7 +119,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "--stats-log-path",
             default=None,
             metavar="PATH",
-            help="statistics log file path (default: <dest>/bacchus-stats.log)",
+            help="statistics log file path (default: unique file under /dev/shm, /run/user/$UID, or TMPDIR, prefix bacchus-stats-)",
         )
         sp.add_argument(
             "--absolute-max-size",
@@ -181,38 +182,9 @@ def _password_from_args(ns: argparse.Namespace) -> str:
     return ""
 
 
-def _print_options(cfg: BcsConfig, ns: argparse.Namespace) -> None:
-    print(f"Source directory:                    {cfg.source}")
-    print(f"Destination directory:               {cfg.dest}")
-    print(f"Base name for archive:               {cfg.basename}")
-    print(f"Estimate size and duration:          {'on' if cfg.estimate else 'off'}")
-    print(f"Show detailed statistics:            {'on' if cfg.statistics else 'off'}")
-    if cfg.statistics:
-        print(f"Statistics log file:                 {'on' if cfg.stats_file_log else 'off'}")
-        if cfg.stats_file_log:
-            lp = cfg.stats_file_log_path if cfg.stats_file_log_path is not None else (cfg.dest / "bacchus-stats.log")
-            print(f"Statistics log path:                 {lp.resolve()}")
-    if cfg.compress or cfg.password:
-        print(f"Use ramdisk for intermediate dirs:   {'on' if cfg.ramdisk else 'off'}")
-    else:
-        print("Use ramdisk for intermediate dirs:   disabled")
-
-    if cfg.compress and not cfg.ramdisk:
-        print(f"Intermediate compression directory:  {cfg.compressdir}")
-    if not cfg.compress:
-        print("Compression:                         disabled")
-
-    if not cfg.password:
-        print("Encryption:                          disabled")
-    else:
-        if ns.filepassword:
-            print(f"Password, file-based:                {ns.filepassword}")
-        elif ns.commandpassword:
-            print("Password:                            command-line")
-        elif ns.userpassword == "on":
-            print("Password:                            console from user")
-        if ns.revealpassword == "on":
-            print(f"Password is:                         {cfg.password}")
+def _ensure_default_stats_log_path(cfg: BcsConfig) -> None:
+    if cfg.stats_file_log and cfg.statistics and cfg.stats_file_log_path is None:
+        cfg.stats_file_log_path = statsmod.create_default_stats_log_path()
 
 
 def _confirm_start(cfg: BcsConfig, ns: argparse.Namespace) -> None:
@@ -263,42 +235,20 @@ def main(argv: list[str] | None = None) -> int:
     cfg = _ns_to_cfg(ns)
 
     if ns.subcommand == "backup":
-        print("\n ====================================\n|| Running Bacchus backup operation ||\n ====================================")
-        _print_options(cfg, ns)
-        if not cfg.ramdisk and (cfg.compress or cfg.password):
-            print(f"Intermediate tar directory:          {cfg.tardir}")
-        _BACKUP_OPT_COL = 37
-        print(
-            f"{'Volume size for archive (KiB):':<{_BACKUP_OPT_COL}}"
-            f"{statsmod._fmt_kb_scaled(cfg.volumesize_kb)}"
-        )
-        print(
-            f"{'Absolute max chunk (KiB):':<{_BACKUP_OPT_COL}}"
-            f"{statsmod._fmt_kb_scaled(cfg.resolved_absolute_max_kb())}"
-        )
-        print(
-            f"{'Mini MV slice (KiB):':<{_BACKUP_OPT_COL}}"
-            f"{statsmod._fmt_kb_scaled(cfg.resolved_mini_slice_kb())}"
-        )
-        scope = cfg.archive_path_scope
-        top = (cfg.archive_top_dir or "").strip()
-        print(f"{'Archive path scope:':<{_BACKUP_OPT_COL}}{scope}")
-        if top:
-            print(f"{'Archive top directory name:':<{_BACKUP_OPT_COL}}{top}")
-        print()
+        _ensure_default_stats_log_path(cfg)
+        preamble_body = "\n".join(operation_preamble.backup_start_banner_and_lines(cfg, ns))
+        print(preamble_body)
         _confirm_start(cfg, ns)
-        backup_chunked.run_backup(cfg)
+        backup_chunked.run_backup(cfg, stats_log_preamble=preamble_body + "\n")
         return 0
 
     if ns.subcommand == "restore":
-        print("\n =====================================\n|| Running Bacchus restore operation ||\n =====================================")
-        _print_options(cfg, ns)
-        if cfg.password and not cfg.ramdisk:
-            print(f"Intermediate decryption directory:   {cfg.decryptdir}")
-        print()
+        _ensure_default_stats_log_path(cfg)
+        preamble_body = "\n".join(operation_preamble.restore_start_banner_and_lines(cfg, ns))
+        print(preamble_body)
         _confirm_start(cfg, ns)
 
-        restore_chunked.run_restore(cfg)
+        restore_chunked.run_restore(cfg, stats_log_preamble=preamble_body + "\n")
         return 0
 
     return 1

@@ -221,7 +221,7 @@ def _tier3(
     return chunk_index
 
 
-def run_backup(cfg: BcsConfig) -> None:
+def run_backup(cfg: BcsConfig, *, stats_log_preamble: str = "") -> None:
     tmp_prefix = Path(tempfile.mktemp(prefix="baccus-", dir="/tmp"))
     tmp_runtime = Path(str(tmp_prefix) + ".runtime")
     # Wall clock for completion "Total runtime" (includes ramdisk, du, preorder walk, and all chunks).
@@ -260,12 +260,14 @@ def run_backup(cfg: BcsConfig) -> None:
 
     atexit.register(cleanup)
 
-    stats_log_path = (
-        cfg.stats_file_log_path.resolve()
-        if cfg.stats_file_log_path is not None
-        else cfg.dest.resolve() / "bacchus-stats.log"
-    )
     stats_file_on = cfg.stats_file_log and cfg.statistics
+    stats_log_path: Path | None = None
+    if stats_file_on:
+        stats_log_path = (
+            cfg.stats_file_log_path.resolve()
+            if cfg.stats_file_log_path is not None
+            else statsmod.create_default_stats_log_path()
+        )
 
     source_root = cfg.source.resolve()
     source_size_total = int(
@@ -275,33 +277,34 @@ def run_backup(cfg: BcsConfig) -> None:
     absolute = cfg.absolute_bytes()
 
     est_chunks = max(1, (source_size_total * 1024 + desired - 1) // desired)
-    if cfg.estimate:
-        lw = statsmod.STATS_ESTIMATE_LABEL_WIDTH
-        print(f"Estimating total size of:  {source_root}\n")
-        print(f"{'Total size:':<{lw}}{statsmod._fmt_kb_scaled(source_size_total)}")
-        chunk_detail = f"{est_chunks} (~{statsmod._fmt_int(cfg.volumesize_kb)}k nominal)"
-        print(f"{'Chunks (rough):':<{lw}}{chunk_detail}")
-        print()
-    ordered_paths = iter_source_paths_tar_order(source_root)
-    stats_start = int(time.time())
-    persistence.save(
-        tmp_runtime,
-        persistence.initial_backup_state(
-            cfg.dest.resolve(),
-            est_chunks,
-            stats_start,
-            source_size_total,
-            wall_clock_start_timestamp=wall_clock_start,
-        ),
-    )
 
-    tar_work_cwd = backup_tar_chdir(cfg, source_root)
+    with statsmod.stats_file_session(stats_file_on, stats_log_path, preamble=stats_log_preamble):
+        if cfg.estimate:
+            lw = statsmod.STATS_ESTIMATE_LABEL_WIDTH
+            statsmod.stats_message(f"Estimating total size of:  {source_root}")
+            statsmod.stats_message("")
+            statsmod.stats_message(f"{'Total size:':<{lw}}{statsmod._fmt_kb_scaled(source_size_total)}")
+            chunk_detail = f"{est_chunks} (~{statsmod._fmt_int(cfg.volumesize_kb)}k nominal)"
+            statsmod.stats_message(f"{'Chunks (rough):':<{lw}}{chunk_detail}")
+            statsmod.stats_message("")
+        ordered_paths = iter_source_paths_tar_order(source_root)
+        stats_start = int(time.time())
+        persistence.save(
+            tmp_runtime,
+            persistence.initial_backup_state(
+                cfg.dest.resolve(),
+                est_chunks,
+                stats_start,
+                source_size_total,
+                wall_clock_start_timestamp=wall_clock_start,
+            ),
+        )
 
-    chunk_index = 1
-    pending_paths: list[str] = []
-    pending_raw = 0
+        tar_work_cwd = backup_tar_chdir(cfg, source_root)
 
-    with statsmod.stats_file_session(stats_file_on, stats_log_path):
+        chunk_index = 1
+        pending_paths: list[str] = []
+        pending_raw = 0
 
         def flush() -> None:
             nonlocal chunk_index, pending_paths, pending_raw
